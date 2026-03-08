@@ -781,7 +781,8 @@ async function renderDone(data) {
 
 async function downloadCsv() {
   const { csv } = await fetchCsv();
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  // 加 UTF-8 BOM（\uFEFF），Excel/Windows 记事本才能正确识别中文编码
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'labels_export.csv';
