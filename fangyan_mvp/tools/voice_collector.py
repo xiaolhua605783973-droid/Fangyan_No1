@@ -497,6 +497,7 @@ let mediaRecorder = null;
 let audioChunks   = [];
 let recordedBlob  = null;
 let isRecording   = false;
+let isPlayback    = false;  // 回放确认期间禁止重新录音
 let timerInterval = null;
 let timerSeconds  = 0;
 let currentPrompt = null;
@@ -567,6 +568,9 @@ async function fetchCsv() {
 // 录音
 // ──────────────────────────────────────
 async function startRecording() {
+  if (isPlayback) return;  // 回放确认期间不允许开始录音
+  clearInterval(timerInterval);  // 防御：确保旧定时器已清除
+  timerInterval = null;
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     audioChunks = [];
@@ -608,7 +612,9 @@ async function startRecording() {
 function stopRecording() {
   if (!isRecording || !mediaRecorder) return;
   clearInterval(timerInterval);
+  timerInterval = null;
   isRecording = false;
+  isPlayback = true;  // 进入回放确认状态，阻止录音按钮重新触发
   mediaRecorder.stop();
   document.getElementById('recordBtn').classList.remove('recording');
   document.getElementById('recordBtn').textContent = '🎙';
@@ -616,6 +622,7 @@ function stopRecording() {
 }
 
 function toggleRecord() {
+  if (isPlayback) return;  // 回放期间禁止操作
   if (isRecording) stopRecording();
   else startRecording();
 }
@@ -629,19 +636,20 @@ function showPlayback() {
   audio.id = 'audioPlayer';
   audio.controls = true;
   audio.src = url;
+  // 不自动播放：部分浏览器会阻止 autoplay 并抛异常导致状态混乱
   document.getElementById('playbackArea').appendChild(audio);
-  audio.play();
 
   document.getElementById('btnSave').disabled   = false;
   document.getElementById('btnReRecord').disabled = false;
-  showToast('录音完成，请回放确认后点"保存"');
+  showToast('点击播放器确认录音，再点"保存"');
 }
 
 function reRecord() {
   recordedBlob = null;
+  isPlayback = false;  // 退出回放确认状态，允许重新录音
   const existing = document.getElementById('audioPlayer');
   if (existing) existing.remove();
-  document.getElementById('recordTimer').textContent = '';
+  document.getElementById('recordTimer').textContent = '00:00';
   document.getElementById('recordStatus').textContent = '点击下方按钮开始录音';
   document.getElementById('btnSave').disabled   = true;
   document.getElementById('btnReRecord').disabled = true;
