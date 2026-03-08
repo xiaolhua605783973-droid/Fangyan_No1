@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>绍兴方言语音识别 · B2B 基础设施演示</title>
+  <style>
+    /* ============================
+       基础重置与全局变量
+    ============================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-primary:    #0f172a;
+      --bg-secondary:  #1e293b;
+      --bg-card:       #1e293b;
+      --bg-panel:      #0d1f35;
+      --accent-blue:   #3b82f6;
+      --accent-cyan:   #06b6d4;
+      --accent-green:  #10b981;
+      --accent-amber:  #f59e0b;
+      --accent-red:    #ef4444;
+      --text-primary:  #f1f5f9;
+      --text-muted:    #94a3b8;
+      --text-dim:      #475569;
+      --border:        #334155;
+      --radius:        12px;
+      --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei",
+              "Noto Sans SC", sans-serif;
+    }
+
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: var(--font);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ============================
+       顶部标题区
+    ============================ */
+    .hero {
+      text-align: center;
+      padding: 48px 24px 32px;
+      background: linear-gradient(180deg, #0f172a 0%, #0d1f35 100%);
+      border-bottom: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* 背景网格装饰 */
+    .hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(59,130,246,.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59,130,246,.06) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+
+    .hero-badge {
+      display: inline-block;
+      background: rgba(6,182,212,.15);
+      border: 1px solid rgba(6,182,212,.35);
+      color: var(--accent-cyan);
+      font-size: 11px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      padding: 4px 14px;
+      border-radius: 99px;
+      margin-bottom: 16px;
+    }
+
+    .hero h1 {
+      font-size: 2.2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #f1f5f9 30%, #06b6d4 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1.3;
+    }
+
+    .hero p {
+      color: var(--text-muted);
+      margin-top: 10px;
+      font-size: .95rem;
+    }
+
+    /* 离线模式提示条 */
+    #offline-banner {
+      display: none;
+      background: rgba(245,158,11,.12);
+      border-bottom: 1px solid rgba(245,158,11,.3);
+      text-align: center;
+      padding: 8px;
+      font-size: .8rem;
+      color: var(--accent-amber);
+    }
+
+    /* ============================
+       主容器布局
+    ============================ */
+    .main {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 32px 24px 64px;
+    }
+
+    /* ============================
+       场景卡片区
+    ============================ */
+    .section-title {
+      font-size: .7rem;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 16px;
+    }
+
+    .scenarios-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+
+    .scenario-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      transition: border-color .25s, box-shadow .25s, transform .2s;
+      cursor: default;
+    }
+
+    /* EMERGENCY 卡片红色脉冲边框 */
+    .scenario-card.emergency {
+      animation: emergencyPulse 2.4s ease-in-out infinite;
+    }
+    @keyframes emergencyPulse {
+      0%, 100% { border-color: rgba(239,68,68,.3); box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+      50%       { border-color: rgba(239,68,68,.8); box-shadow: 0 0 16px 3px rgba(239,68,68,.25); }
+    }
+
+    .scenario-card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(59,130,246,.5);
+      box-shadow: 0 8px 32px rgba(59,130,246,.12);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .card-icon {
+      font-size: 1.6rem;
+      line-height: 1;
+    }
+
+    .card-title {
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .badge-intent {
+      margin-left: auto;
+      font-size: .65rem;
+      padding: 2px 8px;
+      border-radius: 99px;
+      border: 1px solid;
+      opacity: .8;
+    }
+
+    /* 示例话术按钮 */
+    .phrase-btn {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background: rgba(255,255,255,.04);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      color: var(--text-primary);
+      font-size: .87rem;
+      font-family: var(--font);
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: background .18s, border-color .18s, transform .15s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .phrase-btn:last-child { margin-bottom: 0; }
+
+    .phrase-btn:hover {
+      background: rgba(59,130,246,.12);
+      border-color: rgba(59,130,246,.4);
+      transform: translateX(3px);
+    }
+
+    .phrase-btn:active { transform: translateX(1px) scale(.98); }
+
+    /* 点击水波效果 */
+    .phrase-btn .ripple {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(59,130,246,.35);
+      transform: scale(0);
+      animation: rippleAnim .5s linear;
+      pointer-events: none;
+    }
+    @keyframes rippleAnim {
+      to { transform: scale(4); opacity: 0; }
+    }
+
+    .phrase-btn .btn-icon {
+      display: inline-block;
+      margin-right: 6px;
+      font-size: .8rem;
+      opacity: .5;
+    }
+
+    /* ============================
+       2列主演示区
+    ============================ */
+    .demo-grid {
+      display: grid;
+      grid-template-columns: 1fr 420px;
+      gap: 24px;
+      align-items: start;
+    }
+
+    @media (max-width: 960px) {
+      .demo-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ============================
+       流程动画面板（左侧）
+    ============================ */
+    .pipeline-panel {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: .82rem;
+      color: var(--text-muted);
+    }
+
+    .dot { width: 10px; height: 10px; border-radius: 50%; }
+    .dot-red    { background: #ff5f57; }
+    .dot-yellow { background: #febc2e; }
+    .dot-green  { background: #28c840; }
+
+    /* 流程步骤列表 */
+    .steps {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 16px 0;
+      border-bottom: 1px solid rgba(255,255,255,.04);
+      opacity: .3;
+      transition: opacity .35s;
+    }
+
+    .step:last-child { border-bottom: none; }
+    .step.active  { opacity: 1; }
+    .step.done    { opacity: .7; }
+
+    /* 步骤左侧时间线圆圈 */
+    .step-indicator {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .8rem;
+      flex-shrink: 0;
+      margin-top: 2px;
+      transition: border-color .3s, background .3s;
+      position: relative;
+    }
+
+    .step.active .step-indicator {
+      border-color: var(--accent-cyan);
+      background: rgba(6,182,212,.12);
+    }
+
+    .step.done .step-indicator {
+      border-color: var(--accent-green);
+      background: rgba(16,185,129,.12);
+    }
+
+    /* 进行中的旋转动画 */
+    .step.active .step-indicator::after {
+      content: '';
+      position: absolute; inset: -4px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      border-top-color: var(--accent-cyan);
+      animation: spin .8s linear infinite;
+    }
+
+    .step.done .step-indicator::after { display: none; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .step-body { flex: 1; min-width: 0; }
+
+    .step-label {
+      font-size: .8rem;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .step-content {
+      font-size: .92rem;
+      color: var(--text-primary);
+      min-height: 22px;
+    }
+
+    /* 麦克风波形动画 */
+    .waveform {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      height: 20px;
+    }
+    .wave-bar {
+      width: 3px;
+      background: var(--accent-cyan);
+      border-radius: 2px;
+      animation: waveBounce 1s ease-in-out infinite;
+    }
+    .wave-bar:nth-child(1) { animation-delay: 0s; }
+    .wave-bar:nth-child(2) { animation-delay: .15s; }
+    .wave-bar:nth-child(3) { animation-delay: .3s; }
+    .wave-bar:nth-child(4) { animation-delay: .45s; }
+    .wave-bar:nth-child(5) { animation-delay: .6s; }
+    @keyframes waveBounce {
+      0%, 100% { height: 4px; }
+      50%       { height: 16px; }
+    }
+
+    /* ASR 进度条 */
+    .progress-bar {
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 8px;
+      width: 180px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue));
+      border-radius: 2px;
+      width: 0;
+      transition: width 0.5s ease;
+    }
+
+    /* 文本对比（方言 → 规范） */
+    .text-compare {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .text-chip {
+      padding: 3px 10px;
+      border-radius: 6px;
+      font-size: .85rem;
+    }
+
+    .text-chip.dialect {
+      background: rgba(245,158,11,.12);
+      border: 1px solid rgba(245,158,11,.3);
+      color: var(--accent-amber);
+    }
+
+    .text-chip.normal {
+      background: rgba(6,182,212,.12);
+      border: 1px solid rgba(6,182,212,.3);
+      color: var(--accent-cyan);
+    }
+
+    .text-arrow { color: var(--text-dim); font-size: .9rem; }
+
+    /* 意图标签 */
+    .intent-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 99px;
+      font-size: .82rem;
+      font-weight: 600;
+    }
+
+    /* 置信度进度 */
+    .confidence-bar {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: .82rem;
+      color: var(--text-muted);
+    }
+
+    .conf-track {
+      width: 80px;
+      height: 5px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .conf-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: var(--accent-green);
+      transition: width 0.6s ease;
+    }
+
+    /* 风险等级展示 */
+    .risk-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 18px;
+      border-radius: 8px;
+      font-size: .95rem;
+      font-weight: 700;
+      letter-spacing: .05em;
+    }
+
+    .risk-badge.LOW    { background: rgba(16,185,129,.15); border: 1px solid rgba(16,185,129,.4); color: #34d399; }
+    .risk-badge.MEDIUM { background: rgba(245,158,11,.15); border: 1px solid rgba(245,158,11,.4); color: #fbbf24; }
+    .risk-badge.HIGH   { background: rgba(239,68,68,.15);  border: 1px solid rgba(239,68,68,.4);  color: #f87171;
+                         animation: riskPulse 1.2s ease-in-out infinite; }
+
+    @keyframes riskPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+      50%       { box-shadow: 0 0 0 8px rgba(239,68,68,.2); }
+    }
+
+    /* ============================
+       JSON 输出面板（右侧）
+    ============================ */
+    .json-panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      position: sticky;
+      top: 24px;
+    }
+
+    .json-panel-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .json-method {
+      background: rgba(59,130,246,.2);
+      color: var(--accent-blue);
+      font-size: .7rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+      letter-spacing: .05em;
+    }
+
+    .json-route {
+      color: var(--text-muted);
+      font-size: .78rem;
+      font-family: "Consolas", "Fira Code", monospace;
+      margin-left: 8px;
+    }
+
+    .json-status {
+      font-size: .72rem;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    .json-status.ok {
+      background: rgba(16,185,129,.15);
+      color: var(--accent-green);
+    }
+
+    .json-status.idle {
+      background: rgba(148,163,184,.1);
+      color: var(--text-dim);
+    }
+
+    /* JSON 代码块 */
+    .json-body {
+      padding: 20px;
+      font-family: "Consolas", "Fira Code", "Cascadia Code", monospace;
+      font-size: .82rem;
+      line-height: 1.7;
+      min-height: 180px;
+    }
+
+    /* JSON 语法高亮 */
+    .j-key    { color: #7dd3fc; }
+    .j-str    { color: #86efac; }
+    .j-num    { color: #fcd34d; }
+    .j-null   { color: #f87171; }
+    .j-obj    { color: var(--text-muted); }
+    .j-cursor {
+      display: inline-block;
+      width: 2px;
+      height: 1em;
+      background: var(--accent-cyan);
+      margin-left: 1px;
+      vertical-align: text-bottom;
+      animation: blink .9s step-end infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    /* 响应延迟统计 */
+    .json-footer {
+      padding: 10px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 18px;
+      font-size: .72rem;
+      color: var(--text-dim);
+    }
+
+    .stat-item b { color: var(--text-muted); }
+
+    /* ============================
+       底部统计区
+    ============================ */
+    .stats-bar {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+      margin-top: 32px;
+      padding: 20px 24px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+
+    .stat-card {
+      text-align: center;
+      flex: 1;
+      min-width: 120px;
+    }
+
+    .stat-value {
+      font-size: 1.6rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .stat-label {
+      font-size: .72rem;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    /* ============================
+       空状态提示
+    ============================ */
+    .empty-hint {
+      text-align: center;
+      padding: 48px 20px;
+      color: var(--text-dim);
+    }
+
+    .empty-hint .hint-icon {
+      font-size: 2.5rem;
+      margin-bottom: 12px;
+      opacity: .4;
+    }
+
+    .empty-hint p {
+      font-size: .85rem;
+    }
+
+    /* ============================
+       加载进入动画 (初始渐入)
+    ============================ */
+    .fade-in {
+      animation: fadeInUp .5s ease both;
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* 延迟级别 */
+    .delay-1 { animation-delay: .1s; }
+    .delay-2 { animation-delay: .2s; }
+    .delay-3 { animation-delay: .3s; }
+    .delay-4 { animation-delay: .4s; }
+  </style>
+</head>
+
+<body>
+
+<!-- 离线模式提示条 -->
+<div id="offline-banner">
+  ⚡ 离线演示模式 — 后端服务未连接，使用预设数据展示完整功能链路
+</div>
+
+<!-- 顶部标题 -->
+<div class="hero">
+  <div class="hero-badge">B2B Speech Infrastructure · MVP Demo</div>
+  <h1>绍兴方言语音识别<br>老年智慧养老基础设施层</h1>
+  <p>将吴语方言语音 → 结构化业务意图 JSON，赋能养老 SaaS 与智能硬件厂商</p>
+</div>
+
+<div class="main">
+
+  <!-- 场景卡片区 -->
+  <div class="section-title">↓ 点击任意话术触发端到端演示</div>
+  <div class="scenarios-grid" id="scenariosGrid">
+    <!-- 由 JS 动态渲染 -->
+  </div>
+
+  <!-- 演示主区 -->
+  <div class="demo-grid">
+
+    <!-- 左侧：流程步骤动画 -->
+    <div class="pipeline-panel fade-in delay-3">
+      <div class="panel-header">
+        <span class="dot dot-red"></span>
+        <span class="dot dot-yellow"></span>
+        <span class="dot dot-green"></span>
+        <span style="margin-left:8px;">识别流水线 · Speech Recognition Pipeline</span>
+      </div>
+      <div class="steps" id="stepsContainer">
+        <!-- 空状态 -->
+        <div class="empty-hint" id="emptyHint">
+          <div class="hint-icon">🎙</div>
+          <p>点击上方任意话术卡片<br>查看完整识别流程动画</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右侧：JSON 输出面板 -->
+    <div>
+      <div class="json-panel fade-in delay-4">
+        <div class="json-panel-header">
+          <div>
+            <span class="json-method">POST</span>
+            <span class="json-route">/v1/speech/recognize</span>
+          </div>
+          <span class="json-status idle" id="jsonStatus">等待请求</span>
+        </div>
+        <div class="json-body" id="jsonOutput">
+          <!-- 空状态：打字机光标 -->
+          <span style="color:var(--text-dim); font-size:.8rem;">// API 响应将在此显示</span><span class="j-cursor"></span>
+        </div>
+        <div class="json-footer">
+          <div class="stat-item"><b>延迟</b><br><span id="statLatency">—</span></div>
+          <div class="stat-item"><b>模式</b><br><span id="statMode">—</span></div>
+          <div class="stat-item"><b>识别引擎</b><br><span id="statEngine">—</span></div>
+        </div>
+      </div>
+
+      <!-- 本次运行统计 -->
+      <div class="stats-bar fade-in delay-4">
+        <div class="stat-card">
+          <div class="stat-value" id="totalCalls">0</div>
+          <div class="stat-label">演示次数</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="avgConf">—</div>
+          <div class="stat-label">平均置信度</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="avgLatency">—</div>
+          <div class="stat-label">平均延迟</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="highRiskCount">0</div>
+          <div class="stat-label">高风险触发</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   数据配置：4 个绍兴话意图场景
+============================================================ */
+const DEMO_SCENARIOS = {
+  CALL_NURSE: {
+    label: "呼叫护士",
+    icon: "🩺",
+    color: "#3b82f6",
+    examples: [
+      { text: "护士啊阿有人", raw: "护士啊阿有人", intent: "CALL_NURSE", confidence: 0.92, risk_level: "LOW" },
+      { text: "帮我叫护士来", raw: "帮我叫护士来", intent: "CALL_NURSE", confidence: 0.88, risk_level: "LOW" },
+      { text: "阿有护士在格", raw: "阿有护士在格", intent: "CALL_NURSE", confidence: 0.85, risk_level: "LOW" }
+    ]
+  },
+  CALL_FAMILY: {
+    label: "联系家属",
+    icon: "👨‍👩‍👧",
+    color: "#10b981",
+    examples: [
+      { text: "拨我儿子打个电话", raw: "拨我儿子打个电话", intent: "CALL_FAMILY", confidence: 0.90, risk_level: "LOW" },
+      { text: "叫我囡儿来一下伐", raw: "叫我囡儿来一下伐", intent: "CALL_FAMILY", confidence: 0.87, risk_level: "LOW" },
+      { text: "联系我屋里人来",   raw: "联系我屋里人来",   intent: "CALL_FAMILY", confidence: 0.83, risk_level: "LOW" }
+    ]
+  },
+  HEALTH_ALERT: {
+    label: "健康告警",
+    icon: "😰",
+    color: "#f59e0b",
+    examples: [
+      { text: "肚皮蛮痛",   raw: "肚皮蛮痛",   intent: "HEALTH_ALERT", confidence: 0.89, risk_level: "MEDIUM" },
+      { text: "头蛮晕格",   raw: "头蛮晕格",   intent: "HEALTH_ALERT", confidence: 0.86, risk_level: "MEDIUM" },
+      { text: "我吃力得很", raw: "我吃力得很", intent: "HEALTH_ALERT", confidence: 0.84, risk_level: "MEDIUM" }
+    ]
+  },
+  EMERGENCY: {
+    label: "紧急求救",
+    icon: "🚨",
+    color: "#ef4444",
+    examples: [
+      { text: "要死哉快来帮我", raw: "要死哉快来帮我", intent: "EMERGENCY", confidence: 0.97, risk_level: "HIGH" },
+      { text: "我跌倒了快来",   raw: "我跌倒了快来",   intent: "EMERGENCY", confidence: 0.95, risk_level: "HIGH" },
+      { text: "救命啊快来人",   raw: "救命啊快来人",   intent: "EMERGENCY", confidence: 0.98, risk_level: "HIGH" }
+    ]
+  }
+};
+
+/* 意图中文映射 */
+const INTENT_LABELS = {
+  CALL_NURSE:   "呼叫护士",
+  CALL_FAMILY:  "联系家属",
+  HEALTH_ALERT: "健康告警",
+  EMERGENCY:    "紧急求救"
+};
+
+/* 风险等级 emoji */
+const RISK_ICONS = { LOW: "🟢", MEDIUM: "🟡", HIGH: "🔴" };
+
+/* 运行时统计 */
+let stats = { calls: 0, confSum: 0, latencySum: 0, highRisk: 0 };
+
+/* 后端是否可用 */
+let isOnline = false;
+
+/* 当前是否有演示正在运行 */
+let isRunning = false;
+
+/* ============================================================
+   初始化：检测后端连通性
+============================================================ */
+async function checkBackend() {
+  try {
+    const ctrl = new AbortController();
+    setTimeout(() => ctrl.abort(), 1500); // 1.5 秒超时
+    const resp = await fetch("http://localhost:8000/v1/health", { signal: ctrl.signal });
+    if (resp.ok) {
+      isOnline = true;
+      document.getElementById("statMode").textContent = "在线";
+      console.log("[Demo] 后端连接成功，使用真实 API");
+    }
+  } catch {
+    // 后端不可用，使用离线模式
+    isOnline = false;
+    document.getElementById("offline-banner").style.display = "block";
+    document.getElementById("statMode").textContent = "离线";
+    document.getElementById("statEngine").textContent = "预设数据";
+    console.log("[Demo] 后端不可用，切换至离线演示模式");
+  }
+}
+
+/* ============================================================
+   渲染场景卡片
+============================================================ */
+function renderScenarios() {
+  const grid = document.getElementById("scenariosGrid");
+  grid.innerHTML = "";
+
+  Object.entries(DEMO_SCENARIOS).forEach(([key, scenario], idx) => {
+    const card = document.createElement("div");
+    card.className = `scenario-card fade-in ${key === "EMERGENCY" ? "emergency" : ""}`;
+    card.style.animationDelay = `${idx * 0.08}s`;
+
+    // 卡片头部
+    const header = document.createElement("div");
+    header.className = "card-header";
+    header.innerHTML = `
+      <span class="card-icon">${scenario.icon}</span>
+      <span class="card-title" style="color:${scenario.color}">${scenario.label}</span>
+      <span class="badge-intent" style="color:${scenario.color}; border-color:${scenario.color}40;">${key}</span>
+    `;
+    card.appendChild(header);
+
+    // 示例话术按钮
+    scenario.examples.forEach(example => {
+      const btn = document.createElement("button");
+      btn.className = "phrase-btn";
+      btn.innerHTML = `<span class="btn-icon">▶</span>${example.text}`;
+      btn.addEventListener("click", (e) => {
+        if (isRunning) return;
+        addRipple(btn, e);
+        runDemo(example, scenario);
+      });
+      card.appendChild(btn);
+    });
+
+    grid.appendChild(card);
+  });
+}
+
+/* 水波点击效果 */
+function addRipple(btn, e) {
+  const rect = btn.getBoundingClientRect();
+  const size = Math.max(rect.width, rect.height);
+  const x = e.clientX - rect.left - size / 2;
+  const y = e.clientY - rect.top  - size / 2;
+  const ripple = document.createElement("span");
+  ripple.className = "ripple";
+  ripple.style.cssText = `width:${size}px;height:${size}px;left:${x}px;top:${y}px`;
+  btn.appendChild(ripple);
+  setTimeout(() => ripple.remove(), 600);
+}
+
+/* ============================================================
+   核心演示流程：分步动画
+============================================================ */
+async function runDemo(example, scenario) {
+  isRunning = true;
+  const startTime = performance.now();
+
+  // 重置 JSON 面板
+  updateJsonPanel(null, "loading");
+
+  // 构建 5 个步骤 DOM
+  buildStepsUI();
+
+  /* --- Step 1: 录音动画 (0ms) --- */
+  await activateStep(0, {
+    label: "Step 1 · 音频采集",
+    content: `
+      <span style="color:var(--accent-cyan)">🎙 正在录音...</span>
+      <div class="waveform" style="margin-left:10px;">
+        <div class="wave-bar"></div><div class="wave-bar"></div>
+        <div class="wave-bar"></div><div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+      </div>
+    `
+  }, 0);
+
+  await sleep(700);
+  doneStep(0, { content: `🎙 音频采集完成 · <span style="color:var(--text-muted);font-size:.8rem;">WAV 16kHz 单声道</span>` });
+
+  /* --- Step 2: ASR 识别 (700ms) --- */
+  await activateStep(1, {
+    label: "Step 2 · ASR 语音识别",
+    content: `
+      <span style="color:var(--accent-cyan)">⚙️ 正在识别...</span>
+      <div class="progress-bar" id="asrProgress">
+        <div class="progress-fill" id="asrFill"></div>
+      </div>
+    `
+  }, 700);
+
+  // 进度条滚动动画
+  await sleep(50); // 等 DOM 渲染
+  const fill = document.getElementById("asrFill");
+  if (fill) {
+    setTimeout(() => { fill.style.width = "35%"; }, 50);
+    setTimeout(() => { fill.style.width = "70%"; }, 200);
+    setTimeout(() => { fill.style.width = "95%"; }, 400);
+  }
+
+  await sleep(650);
+  doneStep(1, { content: `⚙️ ASR 识别完成 · <span style="color:var(--text-muted);font-size:.8rem;">阿里云智能语音 API</span>` });
+
+  /* --- Step 3: 文本规范化 (1350ms) --- */
+  await activateStep(2, {
+    label: "Step 3 · 方言文本规范化",
+    content: `<span style="color:var(--accent-cyan)">📝 规范化处理中...</span>`
+  }, 1350);
+
+  await sleep(400);
+  doneStep(2, {
+    content: `
+      <div class="text-compare">
+        <span class="text-chip dialect">「${example.raw}」</span>
+        <span class="text-arrow">→</span>
+        <span class="text-chip normal">「${example.raw}」</span>
+      </div>
+      <div style="font-size:.75rem;color:var(--text-dim);margin-top:5px;">原始方言 → 规范化文本</div>
+    `
+  });
+
+  /* --- Step 4: 意图识别 (1750ms) --- */
+  await activateStep(3, {
+    label: "Step 4 · 意图识别引擎",
+    content: `<span style="color:var(--accent-cyan)">🎯 匹配意图规则...</span>`
+  }, 1750);
+
+  await sleep(450);
+  const intentColor = scenario.color;
+  doneStep(3, {
+    content: `
+      <span class="intent-chip" style="background:${intentColor}22;border:1px solid ${intentColor}55;color:${intentColor}">
+        ${scenario.icon} ${INTENT_LABELS[example.intent]}
+      </span>
+      <span class="confidence-bar" style="margin-left:10px;">
+        <span>置信度</span>
+        <div class="conf-track">
+          <div class="conf-fill" id="confFill" style="width:0"></div>
+        </div>
+        <span style="color:var(--text-primary)">${(example.confidence * 100).toFixed(0)}%</span>
+      </span>
+    `
+  });
+  // 置信度动画
+  await sleep(50);
+  const confFill = document.getElementById("confFill");
+  if (confFill) confFill.style.width = `${example.confidence * 100}%`;
+
+  /* --- Step 5: 风险等级 (2200ms) --- */
+  await activateStep(4, {
+    label: "Step 5 · 风险等级评估",
+    content: `<span style="color:var(--accent-cyan)">🚦 评估风险等级...</span>`
+  }, 2200);
+
+  await sleep(350);
+  doneStep(4, {
+    content: `
+      <span class="risk-badge ${example.risk_level}">
+        ${RISK_ICONS[example.risk_level]} ${example.risk_level}
+        ${example.risk_level === "HIGH" ? "· 立即触发告警" : example.risk_level === "MEDIUM" ? "· 生成健康记录" : "· 正常流转处理"}
+      </span>
+    `
+  });
+
+  /* --- 调用 API 或使用离线数据 --- */
+  let result = null;
+  let latency = 0;
+
+  if (isOnline) {
+    // 尝试实际调用后端（发送 mock binary blob）
+    try {
+      const apiStart = performance.now();
+      const mockBlob = new Blob([new Uint8Array(1024)], { type: "audio/wav" });
+      const formData = new FormData();
+      formData.append("audio", mockBlob, "demo.wav");
+      const resp = await fetch("http://localhost:8000/v1/speech/recognize", {
+        method: "POST",
+        body: formData
+      });
+      if (resp.ok) {
+        result = await resp.json();
+        latency = Math.round(performance.now() - apiStart);
+      }
+    } catch (err) {
+      console.warn("[Demo] API 调用失败，降级至离线数据", err);
+    }
+  }
+
+  // 离线 fallback：使用预设数据
+  if (!result) {
+    latency = Math.round(performance.now() - startTime);
+    result = {
+      intent:     example.intent,
+      slots:      {},
+      confidence: example.confidence,
+      risk_level: example.risk_level,
+      raw_text:   example.raw
+    };
+    // 模拟网络延迟感
+    if (latency < 200) latency = 200 + Math.floor(Math.random() * 150);
+  }
+
+  /* --- 更新 JSON 面板 --- */
+  updateJsonPanel(result, "ok", latency);
+
+  /* --- 更新统计 --- */
+  stats.calls++;
+  stats.confSum   += example.confidence;
+  stats.latencySum += latency;
+  if (example.risk_level === "HIGH") stats.highRisk++;
+  updateStats();
+
+  isRunning = false;
+}
+
+/* ============================================================
+   步骤 DOM 工具函数
+============================================================ */
+
+/* 构建初始 5 步骤 UI */
+function buildStepsUI() {
+  const container = document.getElementById("stepsContainer");
+  const stepDefs = [
+    { icon: "🎙", label: "Step 1 · 音频采集" },
+    { icon: "⚙️", label: "Step 2 · ASR 语音识别" },
+    { icon: "📝", label: "Step 3 · 方言文本规范化" },
+    { icon: "🎯", label: "Step 4 · 意图识别引擎" },
+    { icon: "🚦", label: "Step 5 · 风险等级评估" }
+  ];
+
+  container.innerHTML = stepDefs.map((s, i) => `
+    <div class="step" id="step-${i}">
+      <div class="step-indicator" id="step-ind-${i}">${s.icon}</div>
+      <div class="step-body">
+        <div class="step-label" id="step-label-${i}">${s.label}</div>
+        <div class="step-content" id="step-content-${i}"></div>
+      </div>
+    </div>
+  `).join("");
+}
+
+/* 激活某步骤 */
+function activateStep(index, opts, delay) {
+  return new Promise(resolve => {
+    setTimeout(() => {
+      const stepEl = document.getElementById(`step-${index}`);
+      if (!stepEl) return resolve();
+
+      // 先把之前步骤全部置为 done（以防跳过）
+      for (let i = 0; i < index; i++) {
+        const el = document.getElementById(`step-${i}`);
+        if (el && !el.classList.contains("done")) {
+          el.classList.remove("active");
+          el.classList.add("done");
+        }
+      }
+
+      stepEl.classList.add("active");
+      if (opts.label)   document.getElementById(`step-label-${index}`).textContent = opts.label;
+      if (opts.content) document.getElementById(`step-content-${index}`).innerHTML = opts.content;
+
+      resolve();
+    }, delay);
+  });
+}
+
+/* 完成某步骤 */
+function doneStep(index, opts = {}) {
+  const stepEl = document.getElementById(`step-${index}`);
+  if (!stepEl) return;
+  stepEl.classList.remove("active");
+  stepEl.classList.add("done");
+
+  // 更新图标为勾
+  const ind = document.getElementById(`step-ind-${index}`);
+  if (ind) ind.textContent = "✓";
+
+  if (opts.content) document.getElementById(`step-content-${index}`).innerHTML = opts.content;
+}
+
+/* ============================================================
+   JSON 面板更新（带打字机高亮效果）
+============================================================ */
+function updateJsonPanel(result, state, latency = 0) {
+  const output  = document.getElementById("jsonOutput");
+  const status  = document.getElementById("jsonStatus");
+  const statLat = document.getElementById("statLatency");
+  const statEng = document.getElementById("statEngine");
+
+  if (state === "loading") {
+    status.className = "json-status idle";
+    status.textContent = "处理中...";
+    output.innerHTML = `<span style="color:var(--text-dim);font-size:.8rem;">// 正在处理请求...</span><span class="j-cursor"></span>`;
+    return;
+  }
+
+  if (state === "ok" && result) {
+    status.className = "json-status ok";
+    status.textContent = "200 OK";
+    statLat.textContent = `${latency}ms`;
+    statEng.textContent = isOnline ? "阿里云 ASR" : "预设数据";
+
+    // 构建语法高亮 JSON
+    output.innerHTML = buildHighlightedJSON(result);
+
+    // 打字机进入动画：依次显示每行
+    const lines = output.querySelectorAll(".jl");
+    lines.forEach((ln, i) => {
+      ln.style.opacity = "0";
+      ln.style.transform = "translateX(-8px)";
+      ln.style.transition = "opacity .18s, transform .18s";
+      setTimeout(() => {
+        ln.style.opacity = "1";
+        ln.style.transform = "none";
+      }, i * 80);
+    });
+  }
+}
+
+/* 构建语法高亮 JSON HTML */
+function buildHighlightedJSON(obj) {
+  const riskColors = { LOW: "#34d399", MEDIUM: "#fbbf24", HIGH: "#f87171" };
+  const rc = riskColors[obj.risk_level] || "#f1f5f9";
+
+  const lines = [
+    `<span class="j-obj">{</span>`,
+    `  <span class="j-key">"intent"</span><span class="j-obj">: </span><span class="j-str">"${obj.intent}"</span><span class="j-obj">,</span>`,
+    `  <span class="j-key">"slots"</span><span class="j-obj">: </span><span class="j-obj">{},</span>`,
+    `  <span class="j-key">"confidence"</span><span class="j-obj">: </span><span class="j-num">${obj.confidence.toFixed(2)}</span><span class="j-obj">,</span>`,
+    `  <span class="j-key">"risk_level"</span><span class="j-obj">: </span><span style="color:${rc}">"${obj.risk_level}"</span><span class="j-obj">,</span>`,
+    `  <span class="j-key">"raw_text"</span><span class="j-obj">: </span><span class="j-str">"${obj.raw_text}"</span>`,
+    `<span class="j-obj">}</span>`
+  ];
+
+  return lines.map(l => `<div class="jl" style="white-space:pre;">${l}</div>`).join("");
+}
+
+/* ============================================================
+   统计更新
+============================================================ */
+function updateStats() {
+  document.getElementById("totalCalls").textContent = stats.calls;
+  document.getElementById("avgConf").textContent =
+    `${(stats.confSum / stats.calls * 100).toFixed(0)}%`;
+  document.getElementById("avgLatency").textContent =
+    `${Math.round(stats.latencySum / stats.calls)}ms`;
+  document.getElementById("highRiskCount").textContent = stats.highRisk;
+}
+
+/* ============================================================
+   工具：sleep
+============================================================ */
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+/* ============================================================
+   初始化入口
+============================================================ */
+(async function init() {
+  renderScenarios();
+  await checkBackend();
+})();
+</script>
+</body>
+</html>
