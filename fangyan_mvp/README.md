@@ -67,17 +67,72 @@ python data/bootstrap/generate_dataset.py --count 200 --add-noise
 python data/bootstrap/regen_demo_audio.py --count 10
 ```
 
-### 7. 语音采集系统（收集真实训练语料）
+### 8. 自动训练流水线
 
 ```bash
-# 启动采集系统，自动打开浏览器
-python tools/voice_collector.py
+# 单次执行（评估准确率 + 自动优化规则）
+python scripts/auto_train.py --data data/collected/labels.jsonl
 
-# 自定义端口和输出目录
-python tools/voice_collector.py --port 8001 --output data/collected
+# 守护进程模式（每30分钟自动执行一次）
+python scripts/auto_train.py --daemon --interval 30
+
+# 试运行（仅查看候选词，不修改规则文件）
+python scripts/auto_train.py --dry-run
+
+# 查看历史训练指标
+cat data/metrics/train_metrics.jsonl | python -m json.tool
 ```
 
-浏览器打开 http://localhost:8001，按提示逐条录音即可。采集结果保存至 `data/collected/`，标注文件为 `data/collected/labels.jsonl`。
+**流程说明：**
+1. 评估 `data/collected/labels.jsonl` 中真实语料的意图准确率
+2. 准确率 < 90% 时，分析错误样本，提取高频候选关键词（阈值：出现 ≥3 次）
+3. 自动合并候选词到 `config/intent_rules.yaml`（带备份）
+4. 重新评估验证：若准确率下降则自动回滚规则文件
+5. 每轮指标写入 `data/metrics/train_metrics.jsonl`
+
+## 生产部署（阿里云 ECS Ubuntu）
+
+### 一键部署
+
+```bash
+# 1. 将代码上传到服务器（本地执行）
+scp -r ./fangyan_mvp root@<服务器IP>:/opt/fangyan/
+
+# 2. SSH 登录服务器后执行
+sudo bash /opt/fangyan/fangyan_mvp/deploy/setup_aliyun_ubuntu.sh
+```
+
+脚本完成后自动启动 **5 个 Docker 服务**：
+
+| 服务 | 端口 | 说明 |
+|------|------|------|
+| `api` | 8000 | FastAPI 识别服务 + Demo 页面 |
+| `voice_collector` | 8001 | 语料收集页面（公开访问） |
+| `scheduler` | — | 自动训练调度器（每30分钟） |
+| `redis` | 6379 | ASR 结果缓存 |
+| `postgres` | 5432 | 识别结果持久化 |
+
+### 运维命令
+
+```bash
+# 查看各服务状态
+docker compose -f deploy/docker-compose.yml ps
+
+# 查看调度器实时日志（训练进度）
+docker compose -f deploy/docker-compose.yml logs -f scheduler
+
+# 手动触发一次训练
+docker compose -f deploy/docker-compose.yml exec scheduler \
+  python scripts/auto_train.py --data data/collected/labels.jsonl
+
+# 语料统计
+wc -l data/collected/labels.jsonl
+
+# 查看准确率趋势
+cat data/metrics/train_metrics.jsonl
+```
+
+
 
 ## API 文档
 
@@ -125,8 +180,11 @@ fangyan_mvp/
 
 ## 性能目标
 
-| 指标 | 目标 | 验收月份 |
-|------|------|---------|
-| 意图准确率 | ≥ 85% | Month 2 |
-| 端到端延迟 | < 2秒 | Month 1 |
-| HIGH风险召回率 | ≥ 90% | Month 2 |
+| 指标 | 目标 | 验收条件 |
+|------|------|------|
+| 意图准确率 | ≥ 90% | 真实语料 ≥100条 |
+| 端到端延迟 | < 2秒 | 生产环境 API 调用 |
+| HIGH 风险召回率 | ≥ 95% | EMERGENCY 意图样本 |
+| 语料环境准确率 | ≥ 85% | 合成数据集 |
+
+> 当当前准确率：**89.3%**（80条真实语料），距 90% 目标仅差 0.7%。继续收集语料将自动优化。

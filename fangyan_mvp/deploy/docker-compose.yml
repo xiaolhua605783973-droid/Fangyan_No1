@@ -12,7 +12,7 @@ services:
       - ALIYUN_ACCESS_KEY=${ALIYUN_ACCESS_KEY}
       - ALIYUN_ACCESS_SECRET=${ALIYUN_ACCESS_SECRET}
       - REDIS_URL=redis://redis:6379/0
-      - DATABASE_URL=postgresql://fangyan:password@postgres:5432/fangyan
+      - DATABASE_URL=postgresql://fangyan:${POSTGRES_PASSWORD:-fangyan123}@postgres:5432/fangyan
       - ENABLE_CACHE=True
       - ENABLE_DEDUP=True
     depends_on:
@@ -23,12 +23,60 @@ services:
     volumes:
       - ../logs:/app/logs
       - ../config:/app/config
+      - collected_data:/app/data/collected
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 5s
       retries: 3
+
+  # ---------------------------------------------------------------
+  # 语料收集服务（公开访问，80条真实语料已收集，持续收集中）
+  # 访问：http://<服务器IP>:8001
+  # ---------------------------------------------------------------
+  voice_collector:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    ports:
+      - "8001:8001"
+    command: python tools/voice_collector.py --no-browser --host 0.0.0.0 --port 8001
+    volumes:
+      - collected_data:/app/data/collected
+      - ../data/bootstrap:/app/data/bootstrap:ro
+      - ../logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ---------------------------------------------------------------
+  # 自动训练调度器（每30分钟执行一次规则优化）
+  # 核心逻辑：evaluate → 提取候选词 → 更新规则 → 回滚保护
+  # ---------------------------------------------------------------
+  scheduler:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    command: >
+      python scripts/auto_train.py
+      --daemon
+      --interval 30
+      --data data/collected/labels.jsonl
+      --rules config/intent_rules.yaml
+      --target-accuracy 0.90
+      --min-freq 3
+    volumes:
+      - collected_data:/app/data/collected
+      - ../config:/app/config
+      - ../data/metrics:/app/data/metrics
+      - ../logs:/app/logs
+    depends_on:
+      - api
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
@@ -46,7 +94,7 @@ services:
     environment:
       POSTGRES_DB: fangyan
       POSTGRES_USER: fangyan
-      POSTGRES_PASSWORD: password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fangyan123}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -60,3 +108,5 @@ services:
 
 volumes:
   postgres_data:
+  # 跨容器共享语料数据（voice_collector写入，scheduler和api读取）
+  collected_data:
