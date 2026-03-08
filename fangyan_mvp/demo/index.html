@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>四川方言语音识别 Demo — B2B 基础设施层</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary: #1a6fdb;
+      --primary-light: #3b8cf0;
+      --primary-dark: #1357b8;
+      --bg: #f4f7fc;
+      --surface: #ffffff;
+      --border: #dde3ee;
+      --text: #1a2233;
+      --text-muted: #6b7a99;
+      --red: #e53935;
+      --red-bg: #fdecea;
+      --orange: #f57c00;
+      --orange-bg: #fff3e0;
+      --green: #2e7d32;
+      --green-bg: #e8f5e9;
+      --gray-bg: #f0f2f5;
+      --shadow: 0 2px 12px rgba(26,111,219,0.10);
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                   "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-light) 100%);
+      color: #fff;
+      padding: 28px 24px 24px;
+      text-align: center;
+    }
+    header h1 { font-size: clamp(1.4rem, 4vw, 2rem); font-weight: 700; letter-spacing: .5px; }
+    header p  { margin-top: 6px; font-size: .9rem; opacity: .82; }
+
+    /* ── Demo mode banner ── */
+    #demo-banner {
+      display: none;
+      background: #fff8e1;
+      border-bottom: 2px solid #ffc107;
+      color: #7b5800;
+      text-align: center;
+      padding: 8px 16px;
+      font-size: .85rem;
+      font-weight: 500;
+    }
+
+    /* ── Main layout ── */
+    main {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 24px 16px 48px;
+      display: grid;
+      gap: 20px;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px;
+    }
+    .card-title {
+      font-size: .8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    /* ── Controls row ── */
+    .controls-row {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+    .toggle-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-size: .88rem;
+      color: var(--text-muted);
+      user-select: none;
+    }
+    .toggle-label input[type="checkbox"] { display: none; }
+    .toggle-track {
+      width: 40px; height: 22px;
+      background: var(--border);
+      border-radius: 11px;
+      position: relative;
+      transition: background .2s;
+    }
+    .toggle-track::after {
+      content: "";
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 4px rgba(0,0,0,.2);
+      transition: transform .2s;
+    }
+    input[type="checkbox"]:checked ~ .toggle-track { background: var(--primary); }
+    input[type="checkbox"]:checked ~ .toggle-track::after { transform: translateX(18px); }
+
+    /* ── Input area ── */
+    .input-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 520px) { .input-grid { grid-template-columns: 1fr; } }
+
+    /* Record button */
+    .record-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      padding: 20px 16px;
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-sm);
+    }
+    #record-btn {
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      border: none;
+      background: var(--primary);
+      color: #fff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform .15s, background .2s, box-shadow .2s;
+      box-shadow: 0 4px 18px rgba(26,111,219,.35);
+      position: relative;
+      outline: none;
+    }
+    #record-btn:hover:not(:disabled) { background: var(--primary-dark); transform: scale(1.05); }
+    #record-btn:disabled { background: #b0bec5; box-shadow: none; cursor: not-allowed; }
+    #record-btn svg { width: 28px; height: 28px; }
+
+    /* Pulse ring */
+    .pulse-ring {
+      display: none;
+      position: absolute;
+      inset: -8px;
+      border-radius: 50%;
+      border: 3px solid rgba(229,57,53,.5);
+      animation: pulse-ring 1.2s ease-out infinite;
+    }
+    #record-btn.recording { background: var(--red); box-shadow: 0 4px 18px rgba(229,57,53,.4); }
+    #record-btn.recording .pulse-ring { display: block; }
+    @keyframes pulse-ring {
+      0%   { transform: scale(1); opacity: 1; }
+      100% { transform: scale(1.55); opacity: 0; }
+    }
+
+    .record-status { font-size: .88rem; color: var(--text-muted); text-align: center; }
+    .record-status .timer { font-size: 1.1rem; font-weight: 700; color: var(--red); margin-top: 2px; }
+
+    /* Upload area */
+    .upload-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 20px 16px;
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+      text-align: center;
+      min-height: 140px;
+    }
+    .upload-area:hover, .upload-area.drag-over {
+      border-color: var(--primary);
+      background: #eef4ff;
+    }
+    .upload-area svg { color: var(--primary); opacity: .7; }
+    .upload-area p { font-size: .88rem; color: var(--text-muted); line-height: 1.5; }
+    .upload-area .file-name {
+      font-size: .82rem;
+      font-weight: 600;
+      color: var(--primary);
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #file-input { display: none; }
+
+    /* Submit button */
+    #submit-btn {
+      width: 100%;
+      padding: 13px;
+      border: none;
+      border-radius: var(--radius-sm);
+      background: var(--primary);
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s, transform .1s;
+      letter-spacing: .3px;
+    }
+    #submit-btn:hover:not(:disabled) { background: var(--primary-dark); }
+    #submit-btn:active:not(:disabled) { transform: scale(.99); }
+    #submit-btn:disabled { background: #b0bec5; cursor: not-allowed; }
+    #submit-btn .spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Result card ── */
+    #result-card { display: none; }
+    .result-inner {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+    @media (max-width: 520px) { .result-inner { grid-template-columns: 1fr; } }
+
+    .intent-badge {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 18px;
+      border-radius: var(--radius-sm);
+      background: var(--gray-bg);
+    }
+    .intent-badge .intent-text {
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: .5px;
+    }
+    .intent-badge .intent-en {
+      font-size: .78rem;
+      color: var(--text-muted);
+      font-weight: 500;
+      margin-top: 2px;
+    }
+
+    .risk-chip {
+      display: inline-block;
+      padding: 3px 12px;
+      border-radius: 20px;
+      font-size: .75rem;
+      font-weight: 700;
+      letter-spacing: .5px;
+    }
+    .risk-HIGH   { background: var(--red-bg);    color: var(--red);    border: 1px solid var(--red); }
+    .risk-MEDIUM { background: var(--orange-bg); color: var(--orange); border: 1px solid var(--orange); }
+    .risk-LOW    { background: var(--green-bg);  color: var(--green);  border: 1px solid var(--green); }
+
+    .result-field label {
+      display: block;
+      font-size: .75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .8px;
+      margin-bottom: 6px;
+    }
+    .result-field .value {
+      font-size: .95rem;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    /* Confidence bar */
+    .conf-bar-wrap { margin-top: 6px; }
+    .conf-bar-bg {
+      height: 8px;
+      border-radius: 4px;
+      background: var(--border);
+      overflow: hidden;
+    }
+    .conf-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: linear-gradient(90deg, var(--primary), var(--primary-light));
+      transition: width .6s ease;
+    }
+    .conf-value { font-size: .82rem; color: var(--text-muted); margin-top: 4px; }
+
+    .raw-text-box {
+      grid-column: 1 / -1;
+      background: var(--gray-bg);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      font-size: .95rem;
+      line-height: 1.6;
+      color: var(--text);
+      border-left: 3px solid var(--primary);
+      word-break: break-all;
+    }
+
+    /* Latency tag */
+    .latency-tag {
+      font-size: .78rem;
+      color: var(--text-muted);
+      background: var(--gray-bg);
+      border-radius: 20px;
+      padding: 2px 10px;
+      display: inline-block;
+    }
+
+    /* ── History ── */
+    #history-card { display: none; }
+    .history-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .history-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: var(--gray-bg);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: background .15s;
+      font-size: .88rem;
+    }
+    .history-item:hover { background: #e8edf7; }
+    .history-intent { font-weight: 600; color: var(--primary); min-width: 72px; }
+    .history-text   { flex: 1; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .history-conf   { color: var(--text-muted); font-size: .8rem; }
+    .history-time   { color: var(--text-muted); font-size: .76rem; white-space: nowrap; }
+
+    /* ── Error toast ── */
+    #toast {
+      display: none;
+      position: fixed;
+      bottom: 24px; left: 50%;
+      transform: translateX(-50%);
+      background: #323232;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 24px;
+      font-size: .88rem;
+      z-index: 9999;
+      box-shadow: 0 4px 16px rgba(0,0,0,.2);
+      animation: fade-in .2s ease;
+    }
+    @keyframes fade-in { from { opacity: 0; transform: translateX(-50%) translateY(8px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      font-size: .78rem;
+      color: var(--text-muted);
+      padding: 0 0 32px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>四川方言语音识别 Demo</h1>
+  <p>B2B 语音基础设施层 · 将方言语音转换为结构化业务意图 · 专为养老 SaaS 场景设计</p>
+</header>
+
+<div id="demo-banner">⚡ Demo 模式已开启 — 当前返回模拟数据，不发送真实网络请求</div>
+
+<main>
+
+  <!-- ── Controls row ── -->
+  <div class="controls-row">
+    <label class="toggle-label" title="开启后使用模拟数据，无需后端服务">
+      <input type="checkbox" id="demo-mode-toggle">
+      <span class="toggle-track"></span>
+      Demo 模式
+    </label>
+  </div>
+
+  <!-- ── Input card ── -->
+  <div class="card">
+    <div class="card-title">语音输入</div>
+
+    <div class="input-grid">
+
+      <!-- Record -->
+      <div class="record-area">
+        <button id="record-btn" title="点击开始/停止录音">
+          <div class="pulse-ring"></div>
+          <!-- Mic icon -->
+          <svg id="icon-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8" y1="23" x2="16" y2="23"/>
+          </svg>
+          <!-- Stop icon (hidden by default) -->
+          <svg id="icon-stop" style="display:none" viewBox="0 0 24 24" fill="currentColor">
+            <rect x="5" y="5" width="14" height="14" rx="2"/>
+          </svg>
+        </button>
+        <div class="record-status">
+          <div id="record-label">点击麦克风开始录音</div>
+          <div class="timer" id="record-timer" style="display:none">00:00</div>
+        </div>
+      </div>
+
+      <!-- Upload -->
+      <div class="upload-area" id="upload-area" title="拖拽或点击上传音频文件">
+        <input type="file" id="file-input" accept=".wav,.mp3,.m4a,audio/*">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <polyline points="16 16 12 12 8 16"/>
+          <line x1="12" y1="12" x2="12" y2="21"/>
+          <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+        </svg>
+        <p>拖拽音频文件至此<br><small>或点击选择 WAV / MP3 / M4A</small></p>
+        <span class="file-name" id="file-name" style="display:none"></span>
+      </div>
+    </div>
+
+    <div style="margin-top:16px">
+      <button id="submit-btn" disabled>识别语音</button>
+    </div>
+  </div>
+
+  <!-- ── Result card ── -->
+  <div class="card" id="result-card">
+    <div class="card-title">识别结果</div>
+    <div class="result-inner">
+
+      <!-- Intent badge -->
+      <div class="intent-badge" id="result-intent-badge">
+        <div>
+          <div class="intent-text" id="result-intent-zh">—</div>
+          <div class="intent-en" id="result-intent-en">—</div>
+        </div>
+        <div style="margin-left:auto">
+          <span class="risk-chip" id="result-risk">—</span>
+        </div>
+      </div>
+
+      <!-- Confidence -->
+      <div class="result-field">
+        <label>置信度</label>
+        <div class="conf-bar-wrap">
+          <div class="conf-bar-bg">
+            <div class="conf-bar-fill" id="conf-bar" style="width:0%"></div>
+          </div>
+          <div class="conf-value" id="conf-value">—</div>
+        </div>
+      </div>
+
+      <!-- Latency -->
+      <div class="result-field" style="display:flex;flex-direction:column;justify-content:flex-end">
+        <label>响应延迟</label>
+        <div class="value"><span class="latency-tag" id="result-latency">—</span></div>
+      </div>
+
+      <!-- Raw text -->
+      <div class="raw-text-box" id="result-raw-text">—</div>
+
+    </div>
+  </div>
+
+  <!-- ── History card ── -->
+  <div class="card" id="history-card">
+    <div class="card-title">最近识别记录</div>
+    <ul class="history-list" id="history-list"></ul>
+  </div>
+
+</main>
+
+<footer>四川方言语音识别基础设施 · POC Demo · Mar 2026</footer>
+
+<div id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── Constants ──────────────────────────────────────────────
+  const API_URL = 'http://localhost:8000/v1/speech/recognize';
+  const MAX_HISTORY = 5;
+  const MAX_RECORD_SEC = 30;
+
+  const INTENT_ZH = {
+    CALL_NURSE:   '呼叫护士',
+    CALL_FAMILY:  '联系家属',
+    HEALTH_ALERT: '健康告警',
+    EMERGENCY:    '紧急求救',
+    UNKNOWN:      '未识别',
+  };
+
+  const MOCK_DATA = [
+    { raw_text: '帮我喊哈护士嘛',    intent: 'CALL_NURSE',   confidence: 0.87, risk_level: 'LOW',    slots: {} },
+    { raw_text: '救命哦快来人',       intent: 'EMERGENCY',    confidence: 0.95, risk_level: 'HIGH',   slots: {} },
+    { raw_text: '我不舒服得很',       intent: 'HEALTH_ALERT', confidence: 0.75, risk_level: 'MEDIUM', slots: {} },
+    { raw_text: '给我儿子打个电话',   intent: 'CALL_FAMILY',  confidence: 0.82, risk_level: 'LOW',    slots: {} },
+  ];
+
+  // ── State ──────────────────────────────────────────────────
+  let mediaRecorder = null;
+  let audioChunks   = [];
+  let recordTimerID = null;
+  let recordSeconds = 0;
+  let recordedBlob  = null;
+  let selectedFile  = null;
+  let isRecording   = false;
+  let history       = [];
+
+  // ── DOM refs ───────────────────────────────────────────────
+  const demoToggle   = document.getElementById('demo-mode-toggle');
+  const demoBanner   = document.getElementById('demo-banner');
+  const recordBtn    = document.getElementById('record-btn');
+  const iconMic      = document.getElementById('icon-mic');
+  const iconStop     = document.getElementById('icon-stop');
+  const recordLabel  = document.getElementById('record-label');
+  const recordTimer  = document.getElementById('record-timer');
+  const uploadArea   = document.getElementById('upload-area');
+  const fileInput    = document.getElementById('file-input');
+  const fileNameEl   = document.getElementById('file-name');
+  const submitBtn    = document.getElementById('submit-btn');
+  const resultCard   = document.getElementById('result-card');
+  const historyCard  = document.getElementById('history-card');
+  const historyList  = document.getElementById('history-list');
+  const toast        = document.getElementById('toast');
+
+  // Result fields
+  const resultIntentZh  = document.getElementById('result-intent-zh');
+  const resultIntentEn  = document.getElementById('result-intent-en');
+  const resultRisk      = document.getElementById('result-risk');
+  const confBar         = document.getElementById('conf-bar');
+  const confValue       = document.getElementById('conf-value');
+  const resultLatency   = document.getElementById('result-latency');
+  const resultRawText   = document.getElementById('result-raw-text');
+  const resultBadge     = document.getElementById('result-intent-badge');
+
+  // ── Demo mode ──────────────────────────────────────────────
+  demoToggle.addEventListener('change', () => {
+    demoBanner.style.display = demoToggle.checked ? 'block' : 'none';
+  });
+
+  // ── Recording ──────────────────────────────────────────────
+  recordBtn.addEventListener('click', async () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      await startRecording();
+    }
+  });
+
+  async function startRecording() {
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e) {
+      showToast('无法访问麦克风，请检查浏览器权限');
+      return;
+    }
+
+    // Reset file selection when recording
+    clearFileSelection();
+
+    audioChunks   = [];
+    recordedBlob  = null;
+    isRecording   = true;
+    recordSeconds = 0;
+
+    const mimeType = getSupportedMime();
+    mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+    mediaRecorder.addEventListener('dataavailable', e => {
+      if (e.data.size > 0) audioChunks.push(e.data);
+    });
+    mediaRecorder.addEventListener('stop', () => {
+      stream.getTracks().forEach(t => t.stop());
+      recordedBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+      onAudioReady();
+    });
+    mediaRecorder.start(250);
+
+    // UI
+    recordBtn.classList.add('recording');
+    iconMic.style.display  = 'none';
+    iconStop.style.display = '';
+    recordLabel.textContent = '录音中… 点击停止';
+    recordTimer.style.display = '';
+    updateTimer();
+    recordTimerID = setInterval(() => {
+      recordSeconds++;
+      updateTimer();
+      if (recordSeconds >= MAX_RECORD_SEC) stopRecording();
+    }, 1000);
+
+    submitBtn.disabled = true;
+  }
+
+  function stopRecording() {
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+    clearInterval(recordTimerID);
+    mediaRecorder.stop();
+    isRecording = false;
+
+    recordBtn.classList.remove('recording');
+    iconMic.style.display  = '';
+    iconStop.style.display = 'none';
+    recordLabel.textContent = '录音完成，点击重新录音';
+  }
+
+  function updateTimer() {
+    const m = String(Math.floor(recordSeconds / 60)).padStart(2, '0');
+    const s = String(recordSeconds % 60).padStart(2, '0');
+    recordTimer.textContent = `${m}:${s}`;
+  }
+
+  function getSupportedMime() {
+    const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
+    return types.find(t => MediaRecorder.isTypeSupported(t)) || '';
+  }
+
+  function onAudioReady() {
+    selectedFile = null;
+    submitBtn.disabled = false;
+  }
+
+  // ── File upload ────────────────────────────────────────────
+  uploadArea.addEventListener('click', () => fileInput.click());
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files.length) handleFile(fileInput.files[0]);
+  });
+
+  uploadArea.addEventListener('dragover', e => {
+    e.preventDefault();
+    uploadArea.classList.add('drag-over');
+  });
+  uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('drag-over'));
+  uploadArea.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadArea.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  });
+
+  function handleFile(file) {
+    const allowed = /\.(wav|mp3|m4a)$/i;
+    if (!allowed.test(file.name) && !file.type.startsWith('audio/')) {
+      showToast('请上传 WAV、MP3 或 M4A 格式的文件');
+      return;
+    }
+    // Stop any active recording
+    if (isRecording) stopRecording();
+    recordedBlob = null;
+    selectedFile = file;
+
+    fileNameEl.textContent = file.name;
+    fileNameEl.style.display = '';
+    submitBtn.disabled = false;
+  }
+
+  function clearFileSelection() {
+    selectedFile = null;
+    fileInput.value = '';
+    fileNameEl.style.display = 'none';
+    fileNameEl.textContent = '';
+  }
+
+  // ── Submit ─────────────────────────────────────────────────
+  submitBtn.addEventListener('click', async () => {
+    const audioSource = recordedBlob || selectedFile;
+    if (!demoToggle.checked && !audioSource) { showToast('请先录音或上传音频文件'); return; }
+
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner"></span>识别中…';
+
+    const t0 = performance.now();
+    let result;
+
+    try {
+      if (demoToggle.checked) {
+        // Mock: simulate network delay
+        await sleep(300 + Math.random() * 600);
+        result = { ...MOCK_DATA[Math.floor(Math.random() * MOCK_DATA.length)] };
+      } else {
+        const formData = new FormData();
+        const blob = recordedBlob || selectedFile;
+        const filename = selectedFile ? selectedFile.name : 'recording.webm';
+        formData.append('audio_file', blob, filename);
+
+        const resp = await fetch(API_URL, { method: 'POST', body: formData });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err.detail || `HTTP ${resp.status}`);
+        }
+        result = await resp.json();
+      }
+    } catch (e) {
+      showToast(`识别失败：${e.message}`);
+      submitBtn.disabled = false;
+      submitBtn.textContent = '识别语音';
+      return;
+    }
+
+    const latencyMs = Math.round(performance.now() - t0);
+    renderResult(result, latencyMs);
+    addHistory(result, latencyMs);
+
+    submitBtn.disabled = false;
+    submitBtn.textContent = '识别语音';
+  });
+
+  // ── Render result ──────────────────────────────────────────
+  function renderResult(data, latencyMs) {
+    const intentZh = INTENT_ZH[data.intent] || data.intent;
+    const conf     = typeof data.confidence === 'number' ? data.confidence : 0;
+    const risk     = data.risk_level || 'LOW';
+
+    resultIntentZh.textContent = intentZh;
+    resultIntentEn.textContent = data.intent;
+
+    // Risk chip
+    resultRisk.textContent  = riskLabel(risk);
+    resultRisk.className    = `risk-chip risk-${risk}`;
+
+    // Badge background tint
+    resultBadge.style.background = riskBg(risk);
+
+    // Confidence bar
+    confBar.style.width   = `${Math.round(conf * 100)}%`;
+    confValue.textContent = `${Math.round(conf * 100)}%`;
+
+    // Latency
+    resultLatency.textContent = `${latencyMs} ms`;
+
+    // Raw text
+    resultRawText.textContent = data.raw_text || '（无转写文本）';
+
+    resultCard.style.display = '';
+  }
+
+  function riskLabel(risk) {
+    return { HIGH: '高风险 HIGH', MEDIUM: '中风险 MEDIUM', LOW: '低风险 LOW' }[risk] || risk;
+  }
+  function riskBg(risk) {
+    return { HIGH: '#fff0f0', MEDIUM: '#fff8ee', LOW: '#f0faf0' }[risk] || '#f4f7fc';
+  }
+
+  // ── History ────────────────────────────────────────────────
+  function addHistory(data, latencyMs) {
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+    history.unshift({ data, latencyMs, timeStr });
+    if (history.length > MAX_HISTORY) history.pop();
+    renderHistory();
+  }
+
+  function renderHistory() {
+    historyList.innerHTML = '';
+    history.forEach((item, idx) => {
+      const li = document.createElement('li');
+      li.className = 'history-item';
+      li.innerHTML = `
+        <span class="history-intent">${INTENT_ZH[item.data.intent] || item.data.intent}</span>
+        <span class="history-text">${item.data.raw_text || '—'}</span>
+        <span class="history-conf">${Math.round((item.data.confidence || 0) * 100)}%</span>
+        <span class="risk-chip risk-${item.data.risk_level}" style="font-size:.7rem;padding:2px 8px">${item.data.risk_level}</span>
+        <span class="history-time">${item.timeStr}</span>
+      `;
+      li.addEventListener('click', () => renderResult(item.data, item.latencyMs));
+      historyList.appendChild(li);
+    });
+    historyCard.style.display = history.length ? '' : 'none';
+  }
+
+  // ── Toast ──────────────────────────────────────────────────
+  let toastTimer = null;
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.style.display = 'block';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.style.display = 'none'; }, 3500);
+  }
+
+  // ── Helpers ────────────────────────────────────────────────
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+})();
+</script>
+</body>
+</html>
