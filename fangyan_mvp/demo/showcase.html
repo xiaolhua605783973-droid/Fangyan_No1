@@ -1347,7 +1347,7 @@ function sleep(ms) {
           `<span class="j-obj">}</span>`;
       } catch (err) {
         micStatus.textContent = "API 连接失败";
-        micResult.innerHTML = `<span class="j-null">// 无法连接 API: ${err.message}<br>// 请确认 API 服务已在 8000 端口运行</span>`;
+        micResult.innerHTML = `<span class="j-null">// 无法连接 API: ${err.message}<br>// 请确认 API 服务已在 ${API_BASE} 运行</span>`;
       }
     };
 
