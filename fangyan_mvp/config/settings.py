@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     # NLS 项目 AppKey（在智能语音控制台获取）
     ALIYUN_NLS_APP_KEY: str = ""
     ALIYUN_REGION: str = "cn-shanghai"
+    # 热词词表 ID（提升老年人医疗关键词识别率）
+    # 在阿里云智能语音控制台 → 语音识别 → 热词管理 中创建词表
+    ALIYUN_VOCABULARY_ID: str = ""
+    # 自定义语言模型 ID（可选）
+    ALIYUN_CUSTOMIZATION_ID: str = ""
     TENCENT_SECRET_ID: str = ""
     TENCENT_SECRET_KEY: str = ""
 

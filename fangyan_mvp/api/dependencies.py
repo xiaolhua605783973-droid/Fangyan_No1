@@ -25,6 +25,8 @@ def get_asr_adapter() -> ASRAdapter:
             access_secret=settings.ALIYUN_ACCESS_SECRET,
             region=settings.ALIYUN_REGION,
             app_key=settings.ALIYUN_NLS_APP_KEY,
+            vocabulary_id=settings.ALIYUN_VOCABULARY_ID,
+            customization_id=settings.ALIYUN_CUSTOMIZATION_ID,
         )
     elif settings.ASR_PROVIDER == "whisper":
         from adapters.whisper_asr import WhisperASRAdapter

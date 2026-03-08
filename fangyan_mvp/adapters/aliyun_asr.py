@@ -29,13 +29,18 @@ class AliyunASRAdapter(ASRAdapter):
     # 阿里云 NLS Token API
     TOKEN_URL = "https://nls-meta.cn-shanghai.aliyuncs.com/"
 
-    def __init__(self, access_key: str, access_secret: str, region: str = "cn-shanghai", app_key: str = ""):
+    def __init__(self, access_key: str, access_secret: str, region: str = "cn-shanghai",
+                 app_key: str = "", vocabulary_id: str = "", customization_id: str = ""):
         # RAM AccessKey ID 和 Secret（用于获取 NLS Token）
         self._access_key = access_key
         self._access_secret = access_secret
         self._region = region
         # NLS 项目 AppKey（用于 ASR 请求）；若未单独提供，回落到 access_key（兼容旧配置）
         self._app_key = app_key or access_key
+        # 热词词表 ID（如果在阿里云控制台配置了关键词）
+        self._vocabulary_id = vocabulary_id
+        # 自定义语言模型 ID（可选）
+        self._customization_id = customization_id
         # Token 缓存（避免每次请求都获取）
         self._token: str | None = None
         self._token_expire_time: float = 0.0
@@ -63,6 +68,12 @@ class AliyunASRAdapter(ASRAdapter):
             "enable_punctuation_prediction": "true",
             "enable_inverse_text_normalization": "true",
         }
+        # 热词词表：对老年人医疗关键词进行偏置，显著提升方言识别率
+        if self._vocabulary_id:
+            params["vocabulary_id"] = self._vocabulary_id
+        # 自定义语言模型（如果有关联方言模型）
+        if self._customization_id:
+            params["customization_id"] = self._customization_id
 
         try:
             async with aiohttp.ClientSession() as session:
