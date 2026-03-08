@@ -1,5 +1,6 @@
 import hashlib
 import io
+import subprocess
 import tempfile
 import os
 from typing import Optional
@@ -24,34 +25,52 @@ def _detect_format(filename: str) -> Optional[str]:
     return ext if ext in ALLOWED_FORMATS else None
 
 
+def _ffmpeg_decode(tmp_path: str) -> AudioSegment:
+    """
+    直接调用 ffmpeg subprocess，以文件路径为输入（支持 seek），
+    输出 WAV 到 stdout（WAV 不需要 seek），再包装为 AudioSegment。
+    这是绕过 pydub 管道限制的唯一可靠方式。
+    """
+    from pydub.utils import get_encoder_name
+    ffmpeg_cmd = get_encoder_name()  # 'ffmpeg' 或 'avconv'
+    result = subprocess.run(
+        [ffmpeg_cmd, "-y", "-i", tmp_path, "-f", "wav", "-ar", "44100", "pipe:1"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        raise CouldntDecodeError(
+            f"ffmpeg 无法解码: {result.stderr.decode(errors='replace')[-200:]}"
+        )
+    return AudioSegment.from_wav(io.BytesIO(result.stdout))
+
+
 def _load_audio(audio_bytes: bytes, fmt: Optional[str] = None) -> AudioSegment:
     """
     将音频字节加载为 AudioSegment。
-    先尝试内存流；若失败（WebM/Matroska 等需要 seek 的格式），
-    回退到临时文件（ffmpeg 从文件读取，支持 seek）。
+    策略：
+    1. 内存流 + 指定格式（仅对 WAV/MP3 等不需要 seek 的格式有效）
+    2. 写临时文件 → ffmpeg 直接从文件读取（支持 seek，解决 WebM/Matroska 问题）
+    注意：pydub.from_file(path) 内部仍会 open()+pipe，所以必须绕过 pydub 调用 ffmpeg。
     """
-    # 1. 内存流 + 指定格式
-    if fmt:
+    # 1. 内存流 + 指定格式（快速路径，对 WAV/MP3 有效）
+    if fmt and fmt in ("wav", "mp3", "mp4", "m4a", "ogg", "flac"):
         try:
             return AudioSegment.from_file(io.BytesIO(audio_bytes), format=fmt)
         except Exception:
             pass
 
-    # 2. 内存流 + 自动检测
+    # 2. 写临时文件 → ffmpeg 直接从文件路径读取（WebM/Matroska 等 seek-required 格式）
+    suffix = f".{fmt}" if fmt else ".webm"  # 默认 .webm（浏览器 MediaRecorder 输出）
+    tmp_path = None
     try:
-        return AudioSegment.from_file(io.BytesIO(audio_bytes))
-    except Exception:
-        pass
-
-    # 3. 写临时文件后读取（解决 WebM/Matroska 需要 seek 的问题）
-    suffix = f".{fmt}" if fmt else ".audio"
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        tmp.write(audio_bytes)
-        tmp_path = tmp.name
-    try:
-        return AudioSegment.from_file(tmp_path)
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            tmp.write(audio_bytes)
+            tmp_path = tmp.name
+        return _ffmpeg_decode(tmp_path)
     finally:
-        os.unlink(tmp_path)
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
 
 class AudioProcessor:
