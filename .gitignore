@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# 环境变量（包含密钥，禁止提交）
+.env
+
+# 测试覆盖率
+.coverage
+htmlcov/
+.pytest_cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 日志
+logs/
+*.log
+
+# 音频文件（不存储用户数据）
+data/samples/*.wav
+data/samples/*.mp3
+data/samples/*.m4a
+
+# 模型文件（太大，不入库）
+models/*.bin
+models/*.pt
+
+# OS
+.DS_Store
+Thumbs.db

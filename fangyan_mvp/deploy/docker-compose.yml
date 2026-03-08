@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - ASR_PROVIDER=${ASR_PROVIDER:-aliyun}
+      - ALIYUN_ACCESS_KEY=${ALIYUN_ACCESS_KEY}
+      - ALIYUN_ACCESS_SECRET=${ALIYUN_ACCESS_SECRET}
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://fangyan:password@postgres:5432/fangyan
+      - ENABLE_CACHE=True
+      - ENABLE_DEDUP=True
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../logs:/app/logs
+      - ../config:/app/config
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  postgres:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_DB: fangyan
+      POSTGRES_USER: fangyan
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fangyan"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres_data:

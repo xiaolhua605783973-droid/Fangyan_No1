@@ -1,0 +1,44 @@
+# Web框架
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+# 数据验证
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# 数据库
+sqlalchemy==2.0.25
+psycopg2-binary==2.9.9
+alembic==1.13.1
+
+# 缓存
+redis==5.0.1
+
+# 音频处理
+pydub==0.25.1
+librosa==0.10.1
+
+# 阿里云 ASR SDK
+aliyun-python-sdk-core==2.14.0
+aliyunsdknls-cloud-meta==1.0.0
+
+# 腾讯云 ASR SDK（备选）
+tencentcloud-sdk-python==3.0.1060
+
+# 规则引擎
+pyyaml==6.0.1
+pyahocorasick==2.0.0
+watchdog==4.0.0
+
+# 日志
+structlog==24.1.0
+
+# 测试
+pytest==7.4.4
+pytest-asyncio==0.23.3
+pytest-cov==4.1.0
+httpx==0.26.0
+
+# 工具
+python-dotenv==1.0.0
