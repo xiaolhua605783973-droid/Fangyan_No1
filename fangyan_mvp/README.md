@@ -62,7 +62,22 @@ python data/bootstrap/generate_dataset.py --count 200 --offline
 
 # 在线模式（调用阿里云 TTS，需配置 .env）
 python data/bootstrap/generate_dataset.py --count 200 --add-noise
+
+# 使用 Windows 本地中文 TTS 生成真实语音（无需 API Key）
+python data/bootstrap/regen_demo_audio.py --count 10
 ```
+
+### 7. 语音采集系统（收集真实训练语料）
+
+```bash
+# 启动采集系统，自动打开浏览器
+python tools/voice_collector.py
+
+# 自定义端口和输出目录
+python tools/voice_collector.py --port 8001 --output data/collected
+```
+
+浏览器打开 http://localhost:8001，按提示逐条录音即可。采集结果保存至 `data/collected/`，标注文件为 `data/collected/labels.jsonl`。
 
 ## API 文档
 
