@@ -497,6 +497,7 @@ let mediaRecorder = null;
 let audioChunks   = [];
 let recordedBlob  = null;
 let isRecording   = false;
+let isStarting    = false;  // getUserMedia 异步期间的锁，防止并发双启动
 let isPlayback    = false;  // 回放确认期间禁止重新录音
 let timerInterval = null;
 let timerSeconds  = 0;
@@ -568,9 +569,18 @@ async function fetchCsv() {
 // 录音
 // ──────────────────────────────────────
 async function startRecording() {
-  if (isPlayback) return;  // 回放确认期间不允许开始录音
-  clearInterval(timerInterval);  // 防御：确保旧定时器已清除
+  if (isPlayback || isRecording || isStarting) return;  // 三重锁：回放中/已录音/正在获取麦克风
+  isStarting = true;
+
+  // 立即禁用按钮，防止 await 期间重复点击
+  const btn = document.getElementById('recordBtn');
+  btn.disabled = true;
+  document.getElementById('recordStatus').textContent = '⏳ 正在请求麦克风...';
+
+  // 清理可能残留的旧定时器（防御性）
+  clearInterval(timerInterval);
   timerInterval = null;
+
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     audioChunks = [];
@@ -590,21 +600,29 @@ async function startRecording() {
     };
     mediaRecorder.start(100);
 
+    // 获取麦克风成功后，才正式进入录音状态
+    isStarting = false;
     isRecording = true;
     timerSeconds = 0;
-    document.getElementById('recordBtn').classList.add('recording');
-    document.getElementById('recordBtn').textContent = '⏹';
+    btn.disabled = false;
+    btn.classList.add('recording');
+    btn.textContent = '⏹';
     document.getElementById('recordStatus').textContent = '🔴 正在录音，说完请点停止';
+
+    // 只在这里启动唯一一个定时器
     timerInterval = setInterval(() => {
       timerSeconds++;
       document.getElementById('recordTimer').textContent =
         String(Math.floor(timerSeconds / 60)).padStart(2,'0') + ':' +
         String(timerSeconds % 60).padStart(2,'0');
-      // 超过 15 秒自动停止
-      if (timerSeconds >= 15) stopRecording();
+      if (timerSeconds >= 15) stopRecording();  // 超 15 秒自动停止
     }, 1000);
 
   } catch(e) {
+    // 获取麦克风失败，复位所有状态
+    isStarting = false;
+    btn.disabled = false;
+    document.getElementById('recordStatus').textContent = '点击下方按钮开始录音';
     alert('无法访问麦克风：' + e.message + '\\n请允许浏览器使用麦克风权限。');
   }
 }
@@ -622,7 +640,7 @@ function stopRecording() {
 }
 
 function toggleRecord() {
-  if (isPlayback) return;  // 回放期间禁止操作
+  if (isPlayback || isStarting) return;  // 回放期间或获取麦克风期间禁止操作
   if (isRecording) stopRecording();
   else startRecording();
 }
