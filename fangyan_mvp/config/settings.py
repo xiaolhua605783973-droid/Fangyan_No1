@@ -13,8 +13,12 @@ class Settings(BaseSettings):
 
     # ASR 配置（aliyun | tencent | whisper）
     ASR_PROVIDER: str = "aliyun"
+    # RAM AccessKey ID（用于获取 NLS Token，格式: LTAI5t...）
     ALIYUN_ACCESS_KEY: str = ""
+    # RAM AccessKey Secret
     ALIYUN_ACCESS_SECRET: str = ""
+    # NLS 项目 AppKey（在智能语音控制台获取）
+    ALIYUN_NLS_APP_KEY: str = ""
     ALIYUN_REGION: str = "cn-shanghai"
     TENCENT_SECRET_ID: str = ""
     TENCENT_SECRET_KEY: str = ""
