@@ -22,17 +22,21 @@
 """
 import argparse
 import asyncio
+import io
 import json
 import os
+import socket
 import sys
 import time
 import threading
+import uuid
 import webbrowser
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
@@ -778,6 +782,397 @@ async function updateProgress() {
 </html>"""
 
 
+# ── 远程采集功能 ──────────────────────────────────────────────
+
+# 可选依赖：qrcode[pil]
+try:
+    import qrcode as _qrcode
+    import qrcode.constants as _qr_constants
+    HAS_QRCODE = True
+except ImportError:
+    HAS_QRCODE = False
+
+
+@dataclass
+class RemoteSession:
+    """远程录音会话，每位手机用户独立维护录音进度。"""
+    session_id: str
+    prompt_index: int = 0
+    speaker_id: str = ""
+    saved_count: int = 0
+    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
+
+
+# 会话存储（内存，服务重启后清空）
+remote_sessions: dict[str, RemoteSession] = {}
+
+
+def get_local_ip() -> str:
+    """获取本机局域网 IP（通过 UDP 探测路由，不实际发送数据）。"""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
+    except Exception:
+        return "127.0.0.1"
+
+
+def print_qrcode(url: str, save_path: Path) -> None:
+    """在终端打印 ASCII 二维码，并保存 PNG 到 save_path。"""
+    if not HAS_QRCODE:
+        print("  (qrcode 未安装，跳过二维码生成，可运行: pip install qrcode[pil])")
+        return
+    qr = _qrcode.QRCode(
+        version=1,
+        error_correction=_qr_constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(url)
+    qr.make(fit=True)
+    # 保存 PNG
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    img.save(str(save_path))
+    # 打印 ASCII
+    buf = io.StringIO()
+    qr.print_ascii(out=buf, invert=True)
+    print(buf.getvalue())
+
+
+# ── 远程会话 Pydantic Schema ──
+
+class SessionCreateRequest(BaseModel):
+    speaker_id: str = ""
+
+
+class RemoteSaveRequest(BaseModel):
+    audio_base64: str
+    duration_ms: int = 0
+    speaker_id: str = ""
+
+
+# ── 远程会话路由 ──
+
+@app.post("/session/new")
+async def create_session(req: SessionCreateRequest, request: Request):
+    """创建新采集会话，返回 session_id 和手机专用 share_url。"""
+    if state is None:
+        raise HTTPException(500, "服务未初始化")
+    session_id = str(uuid.uuid4())[:8]
+    remote_sessions[session_id] = RemoteSession(
+        session_id=session_id,
+        speaker_id=req.speaker_id,
+    )
+    host = request.headers.get("host", f"localhost:8001")
+    scheme = request.url.scheme
+    share_url = f"{scheme}://{host}/collect/{session_id}"
+    return {"session_id": session_id, "share_url": share_url}
+
+
+@app.get("/collect/{session_id}", response_class=HTMLResponse)
+async def collect_page(session_id: str):
+    """手机友好录音页面，自动创建会话（若不存在）。"""
+    if state is None:
+        raise HTTPException(500, "服务未初始化")
+    if session_id not in remote_sessions:
+        remote_sessions[session_id] = RemoteSession(session_id=session_id)
+    return HTMLResponse(content=_mobile_html_page(session_id))
+
+
+@app.get("/api/remote_prompt/{session_id}")
+async def get_remote_prompt(session_id: str):
+    """返回指定会话当前待录提示文本。"""
+    if state is None:
+        raise HTTPException(500, "服务未初始化")
+    if session_id not in remote_sessions:
+        raise HTTPException(404, "会话不存在")
+    session = remote_sessions[session_id]
+    if session.prompt_index >= len(state.prompts):
+        return JSONResponse({"done": True, "saved": session.saved_count})
+    prompt = state.prompts[session.prompt_index]
+    return {
+        "done": False,
+        "index": session.prompt_index,
+        "total": len(state.prompts),
+        **prompt,
+    }
+
+
+@app.post("/api/remote_save/{session_id}")
+async def remote_save_audio(session_id: str, req: RemoteSaveRequest):
+    """接收手机上传的音频，保存至统一输出目录并推进会话进度。"""
+    if state is None:
+        raise HTTPException(500, "服务未初始化")
+    if session_id not in remote_sessions:
+        raise HTTPException(404, "会话不存在")
+    session = remote_sessions[session_id]
+    if session.prompt_index >= len(state.prompts):
+        return JSONResponse({"done": True})
+
+    import base64
+    try:
+        audio_bytes = base64.b64decode(req.audio_base64)
+    except Exception as e:
+        raise HTTPException(400, f"音频解码失败: {e}")
+
+    prompt = state.prompts[session.prompt_index]
+    filename = state.next_filename(prompt["intent"])
+    audio_path = state.output_dir / filename
+    audio_path.write_bytes(audio_bytes)
+
+    record = {
+        "file": filename,
+        "text": prompt["text"],
+        "intent": prompt["intent"],
+        "risk_level": prompt["risk_level"],
+        "duration_ms": req.duration_ms,
+        "speaker_id": req.speaker_id or session.speaker_id,
+        "notes": f"remote_session:{session_id}",
+        "collected_at": datetime.now().isoformat(),
+    }
+    with open(state.labels_file, "a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    state.intent_counters[prompt["intent"]] = (
+        state.intent_counters.get(prompt["intent"], 0) + 1
+    )
+    state.saved_count += 1
+    session.saved_count += 1
+    session.prompt_index += 1
+
+    next_done = session.prompt_index >= len(state.prompts)
+    next_prompt = None if next_done else state.prompts[session.prompt_index]
+    return {
+        "ok": True,
+        "saved_as": filename,
+        "done": next_done,
+        "next_prompt": next_prompt,
+    }
+
+
+@app.get("/api/sessions")
+async def list_sessions():
+    """返回所有远程采集会话列表。"""
+    return [
+        {
+            "session_id": s.session_id,
+            "prompt_index": s.prompt_index,
+            "saved_count": s.saved_count,
+            "speaker_id": s.speaker_id,
+            "created_at": s.created_at,
+        }
+        for s in remote_sessions.values()
+    ]
+
+
+def _mobile_html_page(session_id: str) -> str:
+    """手机录音页面 HTML（大字体，按住录音，松开上传）。"""
+    return f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>绍兴方言录音</title>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #f0f4f8; min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center;
+  }}
+  .header {{
+    width: 100%; background: linear-gradient(135deg, #1a73e8, #0d47a1);
+    color: white; padding: 18px 20px; text-align: center;
+  }}
+  .header h1 {{ font-size: 22px; font-weight: 700; }}
+  .header p  {{ font-size: 13px; opacity: .8; margin-top: 4px; }}
+  .card {{
+    background: white; border-radius: 16px; margin: 20px 16px 0;
+    padding: 28px 20px; width: calc(100% - 32px); max-width: 480px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.1); text-align: center;
+  }}
+  .label {{ font-size: 14px; color: #888; margin-bottom: 12px; }}
+  .prompt-text {{
+    font-size: 46px; font-weight: 800; color: #1a1a2e;
+    letter-spacing: 6px; line-height: 1.4;
+    margin: 12px 0 24px; min-height: 80px;
+  }}
+  .progress {{ font-size: 13px; color: #aaa; margin-top: 8px; }}
+  .record-btn {{
+    width: 120px; height: 120px; border-radius: 50%;
+    border: none; background: #1a73e8; color: white;
+    font-size: 48px; cursor: pointer;
+    box-shadow: 0 6px 24px rgba(26,115,232,.45);
+    display: block; margin: 0 auto 16px;
+    transition: all .15s; user-select: none; -webkit-user-select: none;
+    touch-action: none;
+  }}
+  .record-btn.recording {{
+    background: #d32f2f;
+    animation: pulse 1s infinite;
+  }}
+  @keyframes pulse {{
+    0%,100% {{ box-shadow: 0 0 0 0 rgba(211,47,47,.4); }}
+    50%      {{ box-shadow: 0 0 0 20px rgba(211,47,47,0); }}
+  }}
+  .record-status {{ font-size: 18px; color: #555; margin: 8px 0; min-height: 28px; }}
+  .record-timer  {{ font-size: 36px; font-weight: 300; color: #d32f2f; min-height: 50px; }}
+  .success-msg   {{ font-size: 28px; color: #2e7d32; font-weight: 700; margin: 20px 0; }}
+  .done-card     {{ padding: 48px 20px; }}
+  .done-icon     {{ font-size: 80px; margin-bottom: 16px; }}
+  .done-card h2  {{ font-size: 28px; color: #333; }}
+  .done-card p   {{ font-size: 16px; color: #666; margin-top: 12px; }}
+  .hint {{ font-size: 14px; color: #999; margin-top: 16px; line-height: 1.6; }}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🎙 绍兴方言录音</h1>
+  <p>请用绍兴话朗读以下句子 · 按住录音键开始</p>
+</div>
+
+<div class="card" id="mainCard">
+  <div class="label">请用绍兴话朗读以下句子：</div>
+  <div class="prompt-text" id="promptText">加载中...</div>
+  <div class="progress" id="progressText"></div>
+
+  <div class="record-timer" id="recordTimer"></div>
+  <button class="record-btn" id="recordBtn">🎙</button>
+  <div class="record-status" id="recordStatus">按住录音键开始录音</div>
+
+  <div class="hint">按住🎙录音，松开自动上传<br>录完会自动跳到下一句</div>
+</div>
+
+<script>
+const SESSION_ID = '{session_id}';
+let mediaRecorder = null;
+let audioChunks   = [];
+let isRecording   = false;
+let timerInterval = null;
+let timerSecs     = 0;
+let currentPrompt = null;
+
+const btn         = document.getElementById('recordBtn');
+const statusEl    = document.getElementById('recordStatus');
+const timerEl     = document.getElementById('recordTimer');
+const promptEl    = document.getElementById('promptText');
+const progressEl  = document.getElementById('progressText');
+
+async function loadPrompt() {{
+  const r = await fetch(`/api/remote_prompt/${{SESSION_ID}}`);
+  const data = await r.json();
+  if (data.done) {{
+    renderDone(data);
+    return;
+  }}
+  currentPrompt = data;
+  promptEl.textContent  = data.text;
+  progressEl.textContent = `第 ${{data.index + 1}} / ${{data.total}} 句`;
+}}
+
+async function uploadAudio(blob) {{
+  statusEl.textContent = '⏫ 上传中...';
+  const buf    = await blob.arrayBuffer();
+  const bytes  = new Uint8Array(buf);
+  let binary   = '';
+  bytes.forEach(b => binary += String.fromCharCode(b));
+  const b64    = btoa(binary);
+
+  const r = await fetch(`/api/remote_save/${{SESSION_ID}}`, {{
+    method: 'POST',
+    headers: {{ 'Content-Type': 'application/json' }},
+    body: JSON.stringify({{ audio_base64: b64, duration_ms: timerSecs * 1000 }}),
+  }});
+  const result = await r.json();
+
+  if (result.done) {{
+    renderDone(result);
+  }} else {{
+    statusEl.textContent = '✅ 已提交，感谢！';
+    setTimeout(async () => {{
+      currentPrompt = result.next_prompt;
+      promptEl.textContent  = currentPrompt.text;
+      progressEl.textContent = `已完成 ${{result.next_prompt ? '' : ''}}...`;
+      await loadPrompt();  // refresh index/total
+      statusEl.textContent  = '按住录音键开始录音';
+      timerEl.textContent   = '';
+    }}, 1200);
+  }}
+}}
+
+function startTimer() {{
+  timerSecs = 0;
+  timerEl.textContent = '00:00';
+  timerInterval = setInterval(() => {{
+    timerSecs++;
+    timerEl.textContent =
+      String(Math.floor(timerSecs/60)).padStart(2,'0') + ':' +
+      String(timerSecs%60).padStart(2,'0');
+    if (timerSecs >= 15) stopRecording();
+  }}, 1000);
+}}
+
+async function startRecording() {{
+  try {{
+    const stream = await navigator.mediaDevices.getUserMedia({{ audio: true }});
+    audioChunks  = [];
+    const mimeType = MediaRecorder.isTypeSupported('audio/wav')  ? 'audio/wav'
+                   : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
+                   : 'audio/ogg';
+    mediaRecorder = new MediaRecorder(stream, {{ mimeType }});
+    mediaRecorder.ondataavailable = e => {{ if (e.data.size) audioChunks.push(e.data); }};
+    mediaRecorder.onstop = () => {{
+      const blob = new Blob(audioChunks, {{ type: mimeType }});
+      stream.getTracks().forEach(t => t.stop());
+      uploadAudio(blob);
+    }};
+    mediaRecorder.start(100);
+    isRecording = true;
+    btn.classList.add('recording');
+    btn.textContent    = '⏹';
+    statusEl.textContent = '🔴 录音中，松开停止';
+    startTimer();
+  }} catch(e) {{
+    alert('无法访问麦克风：' + e.message + '\\n请允许浏览器麦克风权限。');
+  }}
+}}
+
+function stopRecording() {{
+  if (!isRecording || !mediaRecorder) return;
+  clearInterval(timerInterval);
+  isRecording = false;
+  mediaRecorder.stop();
+  btn.classList.remove('recording');
+  btn.textContent     = '🎙';
+  statusEl.textContent = '处理中...';
+}}
+
+// 按住录音，松开停止（同时支持 touch 和 mouse）
+btn.addEventListener('mousedown',  e => {{ e.preventDefault(); startRecording(); }});
+btn.addEventListener('mouseup',    e => {{ e.preventDefault(); stopRecording();  }});
+btn.addEventListener('mouseleave', e => {{ if (isRecording) stopRecording();     }});
+btn.addEventListener('touchstart', e => {{ e.preventDefault(); startRecording(); }}, {{ passive: false }});
+btn.addEventListener('touchend',   e => {{ e.preventDefault(); stopRecording();  }}, {{ passive: false }});
+
+function renderDone(data) {{
+  document.getElementById('mainCard').innerHTML = `
+    <div class="done-card">
+      <div class="done-icon">🎉</div>
+      <h2>全部完成！</h2>
+      <p>共提交 ${{data.saved || 0}} 条录音<br>感谢您的参与！</p>
+    </div>
+  `;
+}}
+
+// 初始化
+loadPrompt();
+</script>
+</body>
+</html>"""
+
+
 # ──────────────────────────────────────────────
 # 入口
 # ──────────────────────────────────────────────
@@ -810,6 +1205,16 @@ def main():
     print(f"  访问地址：  http://localhost:{args.port}")
     print("  按 Ctrl+C 停止服务")
     print("=" * 55)
+
+    # 局域网 IP + 二维码
+    local_ip = get_local_ip()
+    qr_url   = f"http://{local_ip}:{args.port}/"
+    qr_save  = BASE_DIR / "tools" / "qrcode.png"
+    print(f"\n📱 手机扫码参与录音：{qr_url}")
+    print_qrcode(qr_url, qr_save)
+    if HAS_QRCODE:
+        print(f"  (二维码已保存至 {qr_save})")
+    print()
 
     if not args.no_browser:
         def open_browser():
