@@ -60,8 +60,8 @@ class AliyunASRAdapter(ASRAdapter):
             "token": token,
             "format": "pcm",
             "sample_rate": 16000,
-            "enable_punctuation_prediction": True,
-            "enable_inverse_text_normalization": True,
+            "enable_punctuation_prediction": "true",
+            "enable_inverse_text_normalization": "true",
         }
 
         try:
@@ -71,7 +71,7 @@ class AliyunASRAdapter(ASRAdapter):
                     params=params,
                     data=audio_bytes,
                     headers={"Content-Type": "application/octet-stream"},
-                    timeout=aiohttp.ClientTimeout(total=15),
+                    timeout=aiohttp.ClientTimeout(total=30),
                     proxy=self._proxy,
                 ) as resp:
                     result = await resp.json()
