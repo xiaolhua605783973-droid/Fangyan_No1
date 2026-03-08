@@ -17,11 +17,14 @@ env/
 
 # 环境变量（包含密钥，禁止提交）
 .env
+# 保留示例
+!.env.example
 
 # 测试覆盖率
 .coverage
 htmlcov/
 .pytest_cache/
+coverage.xml
 
 # IDE
 .idea/
@@ -33,14 +36,27 @@ htmlcov/
 logs/
 *.log
 
-# 音频文件（不存储用户数据）
-data/samples/*.wav
-data/samples/*.mp3
-data/samples/*.m4a
+# 音频文件（体积大，不存储；以标注 jsonl 代替）
+*.wav
+*.mp3
+*.m4a
+*.ogg
+*.webm
+*.flac
+
+# 生成的二维码图片
+tools/qrcode.png
 
 # 模型文件（太大，不入库）
-models/*.bin
-models/*.pt
+models/
+*.bin
+*.pt
+*.onnx
+*.gguf
+
+# 数据库 / 缓存
+*.db
+*.sqlite3
 
 # OS
 .DS_Store

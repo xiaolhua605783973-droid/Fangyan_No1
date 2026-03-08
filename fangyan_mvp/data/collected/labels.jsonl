@@ -1,8 +1,0 @@
-{"file": "CALL_NURSE_001.wav", "text": "帮我喊哈护士嘛", "intent": "CALL_NURSE", "risk_level": "LOW", "duration_ms": 15000, "speaker_id": "", "notes": "", "collected_at": "2026-03-08T14:12:17.597569"}
-{"file": "CALL_NURSE_002.wav", "text": "麻烦喊个护士来嘛", "intent": "CALL_NURSE", "risk_level": "LOW", "duration_ms": 5000, "speaker_id": "s001", "notes": "年龄:60-70 性别:male", "collected_at": "2026-03-08T14:16:47.355869"}
-{"file": "CALL_NURSE_003.wav", "text": "护士在不在哦", "intent": "CALL_NURSE", "risk_level": "LOW", "duration_ms": 4000, "speaker_id": "", "notes": "", "collected_at": "2026-03-08T14:18:38.554669"}
-{"file": "CALL_NURSE_004.wav", "text": "喊个护士过来", "intent": "CALL_NURSE", "risk_level": "LOW", "duration_ms": 5000, "speaker_id": "", "notes": "", "collected_at": "2026-03-08T14:18:56.169824"}
-{"file": "CALL_NURSE_005.wav", "text": "帮我叫一下护士", "intent": "CALL_NURSE", "risk_level": "LOW", "duration_ms": 4000, "speaker_id": "", "notes": "", "collected_at": "2026-03-08T14:19:42.294877"}
-{"file": "CALL_NURSE_006.wav", "text": "护士帮我来看看嘛", "intent": "CALL_NURSE", "risk_level": "LOW", "duration_ms": 6000, "speaker_id": "", "notes": "", "collected_at": "2026-03-08T14:20:04.210594"}
-{"file": "CALL_NURSE_007.wav", "text": "护士快来哈", "intent": "CALL_NURSE", "risk_level": "LOW", "duration_ms": 5000, "speaker_id": "", "notes": "", "collected_at": "2026-03-08T14:21:06.909163"}
-{"file": "CALL_NURSE_008.wav", "text": "麻烦叫个医生来嘛", "intent": "CALL_NURSE", "risk_level": "LOW", "duration_ms": 5000, "speaker_id": "", "notes": "", "collected_at": "2026-03-08T14:21:59.549143"}
