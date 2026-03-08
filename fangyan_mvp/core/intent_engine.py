@@ -76,8 +76,8 @@ class RuleBasedIntentEngine:
             # 权重加成
             score *= config.get("weight", 1.0)
 
-            # 归一化置信度（基准分母=2：1关键词+1正则 = 0.75 可达阈值）
-            confidence = min(score / 2.0, 1.0)
+            # 归一化置信度（基准分母=1.5：1关键词=0.67 可达0.6阈值，2关键词=1.0满分）
+            confidence = min(score / 1.5, 1.0)
             min_conf = config.get("min_confidence", MIN_CONFIDENCE)
 
             if confidence >= min_conf:

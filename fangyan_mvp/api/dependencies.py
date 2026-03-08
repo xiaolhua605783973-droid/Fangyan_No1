@@ -6,6 +6,7 @@ from core.cache import ASRCache
 from core.text_normalizer import SichuanDialectNormalizer
 from core.intent_engine import RuleBasedIntentEngine
 from core.risk_control import RiskController
+from db.repository import RecordRepository
 from config.settings import get_settings
 
 
@@ -48,3 +49,13 @@ def get_intent_engine() -> RuleBasedIntentEngine:
 @lru_cache
 def get_risk_controller() -> RiskController:
     return RiskController(keywords_path="config/emergency_keywords.json")
+
+
+@lru_cache
+def get_repository() -> RecordRepository | None:
+    """DB 写入依赖（PostgreSQL 不可达时降级为 None，不阻塞 API 响应）"""
+    settings = get_settings()
+    try:
+        return RecordRepository(database_url=settings.DATABASE_URL)
+    except Exception:
+        return None

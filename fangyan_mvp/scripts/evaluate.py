@@ -72,7 +72,7 @@ def evaluate_text_pipeline(labels_file: str):
     risk_acc = correct_risk / total
 
     print(f"\n=== 评估结果（共 {total} 条）===")
-    print(f"意图准确率: {intent_acc:.1%}  {'✅' if intent_acc >= 0.85 else '❌'} (目标 ≥85%)")
+    print(f"意图准确率: {intent_acc:.1%}  {'[PASS]' if intent_acc >= 0.85 else '[FAIL]'} (目标 >=85%)")
     print(f"风险准确率: {risk_acc:.1%}")
 
     print(f"\n=== 混淆矩阵 ===")

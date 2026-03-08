@@ -47,11 +47,21 @@ curl -X POST http://localhost:8000/v1/speech/recognize \
 ```bash
 pytest tests/ -v --cov=core --cov=api
 
-# 评估意图准确率（需要标注数据）
+# 评估意图准确率（基于文本标注数据）
 python scripts/evaluate.py data/labels.jsonl
 
-# 批量测试
+# 批量测试（需本地服务运行中）
 python scripts/batch_test.py --audio-dir data/samples/
+```
+
+### 6. 生成测试数据集
+
+```bash
+# 离线模式（静音占位，不消耗 TTS API）
+python data/bootstrap/generate_dataset.py --count 200 --offline
+
+# 在线模式（调用阿里云 TTS，需配置 .env）
+python data/bootstrap/generate_dataset.py --count 200 --add-noise
 ```
 
 ## API 文档
