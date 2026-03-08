@@ -809,8 +809,11 @@
 </div>
 
 <script>
-/* ============================================================
-   数据配置：4 个绍兴话意图场景
+/* ——————————————————————————————————————————————————————————— */
+/* API 地址配置（生产环境修改此处）                                         */
+const API_BASE = "http://localhost:8002";
+/* ——————————————————————————————————————————————————————————— */
+/* 数据配置：4 个绍兴话意图场景
 ============================================================ */
 const DEMO_SCENARIOS = {
   CALL_NURSE: {
@@ -882,7 +885,7 @@ async function checkBackend() {
   try {
     const ctrl = new AbortController();
     setTimeout(() => ctrl.abort(), 1500); // 1.5 秒超时
-    const resp = await fetch("http://localhost:8000/health", { signal: ctrl.signal });
+    const resp = await fetch(`${API_BASE}/health`, { signal: ctrl.signal });
     if (resp.ok) {
       isOnline = true;
       document.getElementById("statMode").textContent = "在线";
@@ -1074,7 +1077,7 @@ async function runDemo(example, scenario) {
       const mockBlob = new Blob([new Uint8Array(1024)], { type: "audio/wav" });
       const formData = new FormData();
       formData.append("audio", mockBlob, "demo.wav");
-      const resp = await fetch("http://localhost:8000/v1/speech/recognize", {
+      const resp = await fetch(`${API_BASE}/v1/speech/recognize`, {
         method: "POST",
         body: formData
       });
@@ -1320,7 +1323,7 @@ function sleep(ms) {
       try {
         const fd = new FormData();
         fd.append("audio", blob, "recording.webm");
-        const resp = await fetch("http://localhost:8000/v1/speech/recognize", {
+        const resp = await fetch(`${API_BASE}/v1/speech/recognize`, {
           method: "POST",
           body: fd,
           signal: AbortSignal.timeout(10000),
