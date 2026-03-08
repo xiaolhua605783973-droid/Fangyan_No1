@@ -1,7 +1,10 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from api.routers import health, speech
 from core.logger import get_logger
@@ -34,6 +37,15 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router, tags=["Health"])
     app.include_router(speech.router, prefix="/v1", tags=["Speech"])
+
+    # 挂载 demo 静态页面（showcase + voice_collector 演示）
+    _demo_dir = Path(__file__).parent.parent / "demo"
+    if _demo_dir.exists():
+        app.mount("/demo", StaticFiles(directory=str(_demo_dir), html=True), name="demo")
+
+        @app.get("/", include_in_schema=False)
+        async def root():
+            return FileResponse(str(_demo_dir / "showcase.html"))
 
     return app
 
