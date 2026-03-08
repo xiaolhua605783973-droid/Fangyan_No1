@@ -7,6 +7,13 @@ import yaml
 
 from core.logger import get_logger
 
+try:
+    from watchdog.observers import Observer
+    from watchdog.events import FileSystemEventHandler
+    _WATCHDOG_AVAILABLE = True
+except ImportError:
+    _WATCHDOG_AVAILABLE = False
+
 logger = get_logger(__name__)
 
 MIN_CONFIDENCE = 0.6  # 低于此阈值返回 UNKNOWN
@@ -23,13 +30,16 @@ class IntentResult:
 class RuleBasedIntentEngine:
     """
     基于关键词 + 正则的规则意图识别引擎。
-    规则配置来自 config/intent_rules.yaml，支持热更新。
+    规则配置来自 config/intent_rules.yaml，支持热更新（可选 watchdog）。
     """
 
-    def __init__(self, rules_path: str = "config/intent_rules.yaml"):
+    def __init__(self, rules_path: str = "config/intent_rules.yaml", enable_watch: bool = False):
         self._rules_path = Path(rules_path)
         self._rules: dict = {}
+        self._observer: Optional[object] = None
         self._load_rules()
+        if enable_watch:
+            self._start_watch()
 
     def _load_rules(self) -> None:
         if not self._rules_path.exists():
@@ -42,7 +52,53 @@ class RuleBasedIntentEngine:
     def reload_rules(self) -> None:
         """热更新规则，无需重启服务"""
         self._load_rules()
-        logger.info("intent_rules_reloaded")
+        logger.info("intent_rules_hot_reloaded")
+
+    def _start_watch(self) -> None:
+        """启动 watchdog 文件监听，config/intent_rules.yaml 修改时自动热更新"""
+        if not _WATCHDOG_AVAILABLE:
+            logger.warning("watchdog_not_installed", hint="pip install watchdog>=4.0.0")
+            return
+
+        rules_file = self._rules_path.resolve()
+        engine_ref = self  # 闭包引用，避免循环引用
+
+        class _RulesFileHandler(FileSystemEventHandler):
+            def on_modified(self, event) -> None:  # type: ignore[override]
+                if Path(event.src_path).resolve() == rules_file:
+                    engine_ref.reload_rules()
+
+        observer = Observer()
+        observer.schedule(_RulesFileHandler(), str(rules_file.parent), recursive=False)
+        observer.start()
+        self._observer = observer
+        logger.info("intent_rules_watch_started", path=str(rules_file))
+
+    def stop_watch(self) -> None:
+        """停止 watchdog 文件监听（测试结束或服务关闭时调用）"""
+        if self._observer is not None:
+            self._observer.stop()  # type: ignore[union-attr]
+            self._observer.join()  # type: ignore[union-attr]
+            self._observer = None
+            logger.info("intent_rules_watch_stopped")
+
+    # 风险优先级（值越小风险越高），置信度相同时高风险意图优先
+    _RISK_PRIORITY: dict[str, int] = {
+        "EMERGENCY": 0,
+        "HEALTH_ALERT": 1,
+        "CALL_NURSE": 2,
+        "CALL_FAMILY": 3,
+    }
+
+    def _is_better(self, candidate: "IntentResult", current_best: "IntentResult") -> bool:
+        """比较两个识别结果：置信度更高则优先；置信度相同时，风险等级更高（值更小）则优先。"""
+        if candidate.confidence > current_best.confidence:
+            return True
+        if candidate.confidence == current_best.confidence:
+            cand_prio = self._RISK_PRIORITY.get(candidate.intent, 99)
+            best_prio = self._RISK_PRIORITY.get(current_best.intent, 99)
+            return cand_prio < best_prio
+        return False
 
     def recognize(self, text: str) -> IntentResult:
         """
@@ -81,12 +137,13 @@ class RuleBasedIntentEngine:
             min_conf = config.get("min_confidence", MIN_CONFIDENCE)
 
             if confidence >= min_conf:
-                if best is None or confidence > best.confidence:
-                    best = IntentResult(
-                        intent=intent,
-                        confidence=confidence,
-                        matched_keywords=matched_kw,
-                        matched_patterns=matched_pat,
-                    )
+                candidate = IntentResult(
+                    intent=intent,
+                    confidence=confidence,
+                    matched_keywords=matched_kw,
+                    matched_patterns=matched_pat,
+                )
+                if best is None or self._is_better(candidate, best):
+                    best = candidate
 
         return best or IntentResult(intent="UNKNOWN", confidence=0.0)
