@@ -2,7 +2,7 @@
 
 ## 项目概述
 
-本项目是一个 **B2B 语音基础设施层**，将四川方言老年人语音转换为结构化业务意图（JSON），服务于养老 SaaS 和智能养老硬件厂商。
+本项目是一个 **B2B 语音基础设施层**，将绍兴方言（吴语）老年人语音转换为结构化业务意图（JSON），服务于养老 SaaS 和智能养老硬件厂商。
 
 **核心定位：** 不是老年人 AI 助手，而是让老年人能够使用 AI 的底层基础设施。
 
@@ -52,7 +52,7 @@ fangyan_mvp/
 
 ```python
 # 类名：PascalCase
-class SichuanDialectNormalizer: ...
+class ShaoxingDialectNormalizer: ...
 
 # 函数/方法/变量：snake_case
 def normalize_text(raw_text: str) -> str: ...

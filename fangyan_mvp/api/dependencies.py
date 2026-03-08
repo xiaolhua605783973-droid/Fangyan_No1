@@ -3,7 +3,7 @@ from functools import lru_cache
 from core.audio_processor import AudioProcessor
 from core.asr_adapter import ASRAdapter
 from core.cache import ASRCache
-from core.text_normalizer import SichuanDialectNormalizer
+from core.text_normalizer import ShaoxingDialectNormalizer
 from core.intent_engine import RuleBasedIntentEngine
 from core.risk_control import RiskController
 from db.repository import RecordRepository
@@ -37,8 +37,8 @@ def get_cache() -> ASRCache:
 
 
 @lru_cache
-def get_text_normalizer() -> SichuanDialectNormalizer:
-    return SichuanDialectNormalizer(dict_path="config/dialect_dict.json")
+def get_text_normalizer() -> ShaoxingDialectNormalizer:
+    return ShaoxingDialectNormalizer(dict_path="config/dialect_dict.json")
 
 
 @lru_cache

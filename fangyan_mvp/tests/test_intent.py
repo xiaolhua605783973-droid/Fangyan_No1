@@ -2,12 +2,12 @@ import pytest
 
 from core.intent_engine import RuleBasedIntentEngine
 from core.risk_control import RiskController
-from core.text_normalizer import SichuanDialectNormalizer
+from core.text_normalizer import ShaoxingDialectNormalizer
 
 
 @pytest.fixture
 def normalizer():
-    return SichuanDialectNormalizer(dict_path="config/dialect_dict.json")
+    return ShaoxingDialectNormalizer(dict_path="config/dialect_dict.json")
 
 
 @pytest.fixture
@@ -24,16 +24,19 @@ def risk_controller():
 
 class TestTextNormalizer:
     def test_dialect_replacement(self, normalizer):
-        assert "叫一下" in normalizer.normalize("帮我喊哈护士")
+        # 绍兴话 "勿" 应被替换为 "不"
+        assert "不" in normalizer.normalize("我勿舒服")
 
     def test_filler_removal(self, normalizer):
-        result = normalizer.normalize("我不舒服哦嘛")
-        assert "哦" not in result
-        assert "嘛" not in result
+        # 吴语语气助词 哉/伐 应被去除（绍兴话特有）
+        result = normalizer.normalize("身体勿好受哉伐")
+        assert "哉" not in result
+        assert "伐" not in result
 
     def test_degree_normalization(self, normalizer):
-        result = normalizer.normalize("痛得很")
-        assert "非常" in result
+        # 绍兴话 "蛮" 应被替换为 "很"
+        result = normalizer.normalize("肚皮蛮痛")
+        assert "很" in result
 
     def test_protect_medical_terms(self, normalizer):
         result = normalizer.normalize("头晕得很")

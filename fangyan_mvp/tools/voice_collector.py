@@ -1,7 +1,7 @@
 """
 语音采集系统
 ============
-用于收集四川方言老年人语音训练语料。
+用于收集绍兴方言（吴语）老年人语音训练语料。
 
 使用方式：
     python tools/voice_collector.py
@@ -69,10 +69,10 @@ def load_prompts() -> list[dict]:
 
 def _default_prompts() -> list[dict]:
     return [
-        {"text": "帮我喊哈护士嘛", "intent": "CALL_NURSE", "risk_level": "LOW", "source": "default"},
+        {"text": "护士啊阿有人", "intent": "CALL_NURSE", "risk_level": "LOW", "source": "default"},
         {"text": "救命啊快来人", "intent": "EMERGENCY", "risk_level": "HIGH", "source": "default"},
-        {"text": "我不舒服得很", "intent": "HEALTH_ALERT", "risk_level": "MEDIUM", "source": "default"},
-        {"text": "给我儿子打个电话", "intent": "CALL_FAMILY", "risk_level": "LOW", "source": "default"},
+        {"text": "我勿舒服", "intent": "HEALTH_ALERT", "risk_level": "MEDIUM", "source": "default"},
+        {"text": "拨我儿子打个电话", "intent": "CALL_FAMILY", "risk_level": "LOW", "source": "default"},
     ]
 
 
@@ -293,7 +293,7 @@ def _html_page() -> str:
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>四川方言语音采集系统</title>
+<title>绍兴方言语音采集系统</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: "Microsoft YaHei", sans-serif; background: #f0f4f8; min-height: 100vh; }
@@ -447,7 +447,7 @@ def _html_page() -> str:
 
 <div class="header">
   <div>
-    <h1>🎙 四川方言语音采集系统</h1>
+    <h1>🎙 绍兴方言语音采集系统</h1>
     <div style="font-size:12px;opacity:.75;margin-top:2px">B2B 老年语音基础设施 · 训练语料收集</div>
   </div>
   <div class="stats" id="headerStats">加载中...</div>
@@ -707,7 +707,7 @@ function renderPrompt(p) {
       <span class="intent-badge badge-${p.intent}">${intentLabel(p.intent)}</span>
       <span class="risk-badge risk-${p.risk_level}">${p.risk_level}</span>
       <div class="prompt-text">${p.text}</div>
-      <div class="prompt-hint">请用四川话自然朗读上方文字 · 正常语速说话即可</div>
+      <div class="prompt-hint">请用绍兴话（吴语）自然朗读上方文字 · 正常语速说话即可</div>
     </div>
 
     <div class="prompt-card record-section">
@@ -783,7 +783,7 @@ async function updateProgress() {
 # ──────────────────────────────────────────────
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="四川方言语音采集系统")
+    parser = argparse.ArgumentParser(description="绍兴方言语音采集系统")
     parser.add_argument("--port",       type=int, default=8001, help="监听端口（默认8001）")
     parser.add_argument("--host",       type=str, default="0.0.0.0", help="监听地址")
     parser.add_argument("--output",     type=str, default="data/collected", help="音频输出目录")
@@ -802,7 +802,7 @@ def main():
     state = CollectionState(output_dir)
 
     print("=" * 55)
-    print("  四川方言语音采集系统")
+    print("  绍兴方言语音采集系统")
     print("=" * 55)
     print(f"  提示词总数：{len(state.prompts)} 条")
     print(f"  已保存记录：{state.saved_count} 条")

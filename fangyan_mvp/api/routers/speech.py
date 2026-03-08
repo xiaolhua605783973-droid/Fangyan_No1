@@ -7,7 +7,7 @@ from api.schemas import IntentResponse
 from core.audio_processor import AudioProcessor
 from core.asr_adapter import ASRAdapter
 from core.cache import ASRCache
-from core.text_normalizer import SichuanDialectNormalizer
+from core.text_normalizer import ShaoxingDialectNormalizer
 from core.intent_engine import RuleBasedIntentEngine
 from core.risk_control import RiskController
 from core.logger import get_logger
@@ -63,7 +63,7 @@ async def recognize_speech(
     processor: AudioProcessor = Depends(get_audio_processor),
     asr: ASRAdapter = Depends(get_asr_adapter),
     cache: ASRCache = Depends(get_cache),
-    normalizer: SichuanDialectNormalizer = Depends(get_text_normalizer),
+    normalizer: ShaoxingDialectNormalizer = Depends(get_text_normalizer),
     intent_engine: RuleBasedIntentEngine = Depends(get_intent_engine),
     risk_controller: RiskController = Depends(get_risk_controller),
     repository: RecordRepository | None = Depends(get_repository),

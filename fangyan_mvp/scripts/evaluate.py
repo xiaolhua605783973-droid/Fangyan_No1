@@ -18,12 +18,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.intent_engine import RuleBasedIntentEngine
-from core.text_normalizer import SichuanDialectNormalizer
+from core.text_normalizer import ShaoxingDialectNormalizer
 from core.risk_control import RiskController
 
 
 def evaluate_text_pipeline(labels_file: str):
-    normalizer = SichuanDialectNormalizer("config/dialect_dict.json")
+    normalizer = ShaoxingDialectNormalizer("config/dialect_dict.json")
     intent_engine = RuleBasedIntentEngine("config/intent_rules.yaml")
     risk_controller = RiskController("config/emergency_keywords.json")
 
