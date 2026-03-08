@@ -1318,15 +1318,21 @@ function sleep(ms) {
       micStatus.textContent = "识别中…";
       micResult.innerHTML = '<span class="mic-hint">// 正在调用 ASR 识别…</span>';
 
-      const blob = new Blob(chunks, { type: mimeType || "audio/webm" });
+      // 使用 mediaRecorder.mimeType 获取浏览器实际使用的格式（比预设 mimeType 更准确）
+      const actualMime = mediaRecorder.mimeType || mimeType || "audio/webm";
+      const blob = new Blob(chunks, { type: actualMime });
+      // 根据实际 MIME 类型选择扩展名，让服务端能正确解码
+      const ext = actualMime.includes("ogg") ? "ogg"
+                : actualMime.includes("mp4") ? "mp4"
+                : "webm";
       const t0 = Date.now();
       try {
         const fd = new FormData();
-        fd.append("audio", blob, "recording.webm");
+        fd.append("audio", blob, `recording.${ext}`);
         const resp = await fetch(`${API_BASE}/v1/speech/recognize`, {
           method: "POST",
           body: fd,
-          signal: AbortSignal.timeout(10000),
+          signal: AbortSignal.timeout(40000),  // 40s：兼容阿里云 ASR 首次 Token 获取延迟
         });
         const latency = Date.now() - t0;
         if (!resp.ok) {
